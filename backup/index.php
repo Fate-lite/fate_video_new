@@ -1,7 +1,7 @@
 <?php
 require "./data/index.php";
 $data = data(array("act" => "index"));
-$ver = "20260617_2325";
+$ver = "20260628_1755";
 ?>
 <!DOCTYPE html>
 <html>

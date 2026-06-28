@@ -44,7 +44,41 @@ function db_get()
 }
 
 /**
- * 建表（幂等，IF NOT EXISTS）
+ * 获取持久化用户数据库 SQLite PDO 单例连接（独立于缓存库，防误删）
+ *
+ * @return PDO
+ */
+function db_user_get()
+{
+    static $pdo = null;
+    if ($pdo !== null) {
+        return $pdo;
+    }
+
+    $db_path = dirname(__FILE__) . '/user.db';
+
+    try {
+        $pdo = new PDO('sqlite:' . $db_path);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+        // WAL 模式
+        $pdo->exec('PRAGMA journal_mode = WAL');
+        $pdo->exec('PRAGMA synchronous  = NORMAL');
+        $pdo->exec('PRAGMA cache_size   = 4000');
+        $pdo->exec('PRAGMA temp_store   = MEMORY');
+
+        db_user_create_tables($pdo);
+    } catch (Exception $e) {
+        $pdo = null;
+        error_log('[user_db] SQLite init failed: ' . $e->getMessage());
+    }
+
+    return $pdo;
+}
+
+/**
+ * 创建缓存相关的临时表
  */
 function db_create_tables($pdo)
 {
@@ -72,7 +106,15 @@ function db_create_tables($pdo)
             is_online  INTEGER DEFAULT 0,
             last_check INTEGER NOT NULL
         );
+    ");
+}
 
+/**
+ * 创建持久化用户相关的核心表
+ */
+function db_user_create_tables($pdo)
+{
+    $pdo->exec("
         CREATE TABLE IF NOT EXISTS users (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             email         TEXT    UNIQUE NOT NULL,
@@ -413,7 +455,7 @@ function db_file_size()
  */
 function db_verification_set($email, $code, $expire_sec = 600)
 {
-    $pdo = db_get();
+    $pdo = db_user_get();
     if (!$pdo) return false;
 
     try {
@@ -434,7 +476,7 @@ function db_verification_set($email, $code, $expire_sec = 600)
  */
 function db_verification_verify($email, $code)
 {
-    $pdo = db_get();
+    $pdo = db_user_get();
     if (!$pdo) return false;
 
     try {
@@ -462,7 +504,7 @@ function db_verification_verify($email, $code)
  */
 function db_user_create($email, $password, $nickname)
 {
-    $pdo = db_get();
+    $pdo = db_user_get();
     if (!$pdo) return false;
 
     try {
@@ -483,7 +525,7 @@ function db_user_create($email, $password, $nickname)
  */
 function db_user_get_by_email($email)
 {
-    $pdo = db_get();
+    $pdo = db_user_get();
     if (!$pdo) return null;
 
     try {
@@ -501,7 +543,7 @@ function db_user_get_by_email($email)
  */
 function db_user_verify_password($email, $password)
 {
-    $pdo = db_get();
+    $pdo = db_user_get();
     if (!$pdo) return false;
 
     try {
@@ -519,6 +561,24 @@ function db_user_verify_password($email, $password)
     return false;
 }
 
+/**
+ * 通过邮箱更新用户密码
+ */
+function db_user_update_password($email, $new_password)
+{
+    $pdo = db_user_get();
+    if (!$pdo) return false;
+
+    try {
+        $pwd_hash = password_hash($new_password, PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare('UPDATE users SET password_hash = ? WHERE email = ?');
+        return $stmt->execute([$pwd_hash, $email]);
+    } catch (Exception $e) {
+        error_log('[db] db_user_update_password error: ' . $e->getMessage());
+    }
+    return false;
+}
+
 /* ─────────────────────────────────────────
    USER HISTORY & FAVORITES
    ───────────────────────────────────────── */
@@ -528,7 +588,7 @@ function db_user_verify_password($email, $password)
  */
 function db_history_sync($user_id, $items)
 {
-    $pdo = db_get();
+    $pdo = db_user_get();
     if (!$pdo || empty($items)) return false;
 
     try {
@@ -563,7 +623,7 @@ function db_history_sync($user_id, $items)
  */
 function db_history_list($user_id, $limit = 30)
 {
-    $pdo = db_get();
+    $pdo = db_user_get();
     if (!$pdo) return array();
 
     try {
@@ -584,7 +644,7 @@ function db_history_list($user_id, $limit = 30)
  */
 function db_favorite_toggle($user_id, $vid, $title, $pic)
 {
-    $pdo = db_get();
+    $pdo = db_user_get();
     if (!$pdo) return false;
 
     try {
@@ -617,7 +677,7 @@ function db_favorite_toggle($user_id, $vid, $title, $pic)
  */
 function db_favorite_list($user_id)
 {
-    $pdo = db_get();
+    $pdo = db_user_get();
     if (!$pdo) return array();
 
     try {
@@ -637,7 +697,7 @@ function db_favorite_list($user_id)
  */
 function db_favorite_check($user_id, $vid)
 {
-    $pdo = db_get();
+    $pdo = db_user_get();
     if (!$pdo) return false;
 
     try {

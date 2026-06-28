@@ -18,7 +18,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // 自动响应直接以 AJAX 或 HTTP 访问的 API 请求
-if (isset($_REQUEST['act']) && in_array($_REQUEST['act'], ['send_code', 'register', 'login', 'logout', 'user_info', 'history_sync', 'favorite_toggle', 'favorite_list', 'favorite_check'])) {
+if (isset($_REQUEST['act']) && in_array($_REQUEST['act'], ['send_code', 'register', 'login', 'logout', 'user_info', 'history_sync', 'favorite_toggle', 'favorite_list', 'favorite_check', 'reset_password', 'check_email'])) {
     header('Content-Type: application/json; charset=utf-8');
     
     // 如果是 POST 发来的 JSON 体，解析它
@@ -950,6 +950,12 @@ function cms_data_fetch($params)
         case 'login':
             return cms_user_login($params);
 
+        case 'reset_password':
+            return cms_user_reset_password($params);
+
+        case 'check_email':
+            return cms_user_check_email($params);
+
         case 'logout':
             return cms_user_logout();
 
@@ -974,6 +980,23 @@ function cms_data_fetch($params)
 }
 
 /**
+ * 接口：校验邮箱是否已被注册
+ */
+function cms_user_check_email($params)
+{
+    $email = isset($params['email']) ? trim($params['email']) : '';
+    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return array('code' => 0, 'msg' => '请输入合法的邮箱地址');
+    }
+    
+    $exist = db_user_get_by_email($email);
+    if ($exist) {
+        return array('code' => 0, 'msg' => '该邮箱已被注册，请直接登录');
+    }
+    return array('code' => 1, 'msg' => '该邮箱可以注册');
+}
+
+/**
  * 接口：发送邮箱验证码 (同 Session 60秒防刷限额，验证码10分钟有效)
  */
 function cms_user_send_code($params)
@@ -981,6 +1004,15 @@ function cms_user_send_code($params)
     $email = isset($params['email']) ? trim($params['email']) : '';
     if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return array('code' => 0, 'msg' => '请输入合法的邮箱地址');
+    }
+
+    $type = isset($params['type']) ? trim($params['type']) : 'register';
+    $exist = db_user_get_by_email($email);
+    if ($type === 'register' && $exist) {
+        return array('code' => 0, 'msg' => '该邮箱已被注册，请直接登录');
+    }
+    if ($type === 'reset' && !$exist) {
+        return array('code' => 0, 'msg' => '该邮箱尚未注册账号');
     }
 
     // 防刷限频限制 (60秒)
@@ -1090,6 +1122,45 @@ function cms_user_login($params)
     }
 
     return array('code' => 0, 'msg' => '邮箱或密码错误，请重新输入');
+}
+
+/**
+ * 接口：忘记密码 - 通过邮箱验证码重置密码
+ */
+function cms_user_reset_password($params)
+{
+    $email    = isset($params['email']) ? trim($params['email']) : '';
+    $code     = isset($params['code']) ? trim($params['code']) : '';
+    $password = isset($params['password']) ? trim($params['password']) : '';
+
+    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return array('code' => 0, 'msg' => '请输入正确的邮箱地址');
+    }
+    if (empty($code)) {
+        return array('code' => 0, 'msg' => '请输入邮箱验证码');
+    }
+    if (strlen($password) < 6) {
+        return array('code' => 0, 'msg' => '新密码长度不能少于 6 位');
+    }
+
+    // 检查该邮箱是否已注册
+    $user = db_user_get_by_email($email);
+    if (!$user) {
+        return array('code' => 0, 'msg' => '该邮箱尚未注册账号');
+    }
+
+    // 校验验证码
+    if (!db_verification_verify($email, $code)) {
+        return array('code' => 0, 'msg' => '验证码错误或已过期，请重新获取');
+    }
+
+    // 更新密码
+    $success = db_user_update_password($email, $password);
+    if ($success) {
+        return array('code' => 1, 'msg' => '密码重置成功，请使用新密码登录');
+    }
+
+    return array('code' => 0, 'msg' => '密码重置失败，请稍后重试');
 }
 
 /**
@@ -2075,4 +2146,45 @@ function modifier_decode($str)
     }
     
     return $data_str;
+}
+
+/**
+ * 渲染头部用户区域的初始 HTML（防闪烁）
+ */
+function cms_render_user_area($depth = 0)
+{
+    $rootPath = str_repeat('../', $depth);
+    if ($rootPath === '') {
+        $rootPath = './';
+    }
+
+    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_email'])) {
+        $name = !empty($_SESSION['user_nickname']) ? $_SESSION['user_nickname'] : $_SESSION['user_email'];
+        // 获取第一个字符（支持中文）
+        $firstChar = 'U';
+        if (function_exists('mb_substr')) {
+            $firstChar = mb_strtoupper(mb_substr($name, 0, 1, 'utf-8'), 'utf-8');
+        } else {
+            $firstChar = strtoupper(substr($name, 0, 1));
+        }
+        $nickname = htmlspecialchars(!empty($_SESSION['user_nickname']) ? $_SESSION['user_nickname'] : '用户');
+        $email = htmlspecialchars($_SESSION['user_email']);
+        
+        return '
+        <div class="user-profile" id="userProfileBtn">
+            <div class="user-avatar">' . $firstChar . '</div>
+            <span class="user-name">' . $nickname . '</span>
+        </div>
+        <div class="user-dropdown" id="userDropdownMenu" style="display:none;">
+            <div class="dropdown-header">
+                <div style="font-weight: bold; font-size: 14px; color: #fff;">' . $nickname . '</div>
+                <div class="email">' . $email . '</div>
+            </div>
+            <a href="' . $rootPath . '" class="dropdown-item">返回首页</a>
+            <a href="' . $rootPath . 'list/search/?fav=1" class="dropdown-item" id="myFavBtn">我的追剧</a>
+            <a class="dropdown-item logout" id="logoutBtn">退出登录</a>
+        </div>';
+    } else {
+        return '  <a class="login-btn" id="navLoginBtn">登录</a>';
+    }
 }

@@ -1,7 +1,7 @@
 <?php
 require "./data/index.php";
 $data = data(array("act" => "index"));
-$ver = "20260617_2325";
+$ver = "20260628_1755";
 ?>
 <!DOCTYPE html>
 <html>
@@ -36,10 +36,6 @@ $ver = "20260617_2325";
 
 <div class="header">
 	<a class="logo" href="./" style="background-image:url(./static_yk/images/logo.png)"></a>
-	<div class="search">
-		<input type="text" placeholder="搜索你想看的影片..." id="search" />
-		<a id="searchDo"></a>
-	</div>
 	<div class="navigate">
 		<a href="./" class="current">精选</a>
 		<a href="./list/dianying/">电影</a>
@@ -47,6 +43,12 @@ $ver = "20260617_2325";
 		<a href="./list/zongyi/">综艺</a>
 		<a href="./list/dongman/">动漫</a>
 	</div>
+	<div class="search">
+		<input type="text" placeholder="搜索你想看的影片..." id="search" />
+		<a id="searchDo"></a>
+	</div>
+	
+	<div class="user-area" id="staticUserArea"><?php echo cms_render_user_area(0); ?></div>
 </div>
 
 <div class="main-wrap">

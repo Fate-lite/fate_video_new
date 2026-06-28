@@ -9,7 +9,7 @@ $source_param = isset($_GET["source"]) ? $_GET["source"] : "";
 $data = data(array("act" => "list","type" => $type,"filter" => $_GET["condition"],"page" => $_GET["page"],"source" => $source_param));
 
 $titles = array('dianying'=>'电影','dianshi'=>'电视剧','zongyi'=>'综艺','dongman'=>'动漫');
-$ver = "20260617_2325";
+$ver = "20260628_1755";
 ?>
 <!DOCTYPE html>
 <html>
@@ -42,10 +42,6 @@ $ver = "20260617_2325";
 
 <div class="header">
 	<a class="logo" href="../../" style="background-image:url(../../static_yk/images/logo.png)"></a>
-	<div class="search">
-		<input type="text" placeholder="搜索你想看的影片..." id="search" />
-		<a id="searchDo"></a>
-	</div>
 	<div class="navigate">
 		<a href="../../">精选</a>
 		<a href="../dianying/"<?php echo $type==='dianying'?' class="current"':''?>>电影</a>
@@ -53,6 +49,11 @@ $ver = "20260617_2325";
 		<a href="../zongyi/"<?php echo $type==='zongyi'?' class="current"':''?>>综艺</a>
 		<a href="../dongman/"<?php echo $type==='dongman'?' class="current"':''?>>动漫</a>
 	</div>
+	<div class="search">
+		<input type="text" placeholder="搜索你想看的影片..." id="search" />
+		<a id="searchDo"></a>
+	</div>
+	<div class="user-area" id="staticUserArea"><?php echo cms_render_user_area(2); ?></div>
 </div>
 
 <div class="page-loading" id="pageLoading"><div class="spinner"></div></div>

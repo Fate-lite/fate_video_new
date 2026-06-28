@@ -3,7 +3,7 @@ if(empty($_GET["vid"])){ header("Location: ../../");die(); }
 require "../data/index.php";
 $raw = data(array("act" => "item","id" => $_GET["vid"]));
 $data = isset($raw['data']) ? $raw['data'] : $raw;
-$ver = "20260617_2325";
+$ver = "20260628_1755";
 ?>
 <!DOCTYPE html>
 <html>
@@ -41,10 +41,6 @@ $ver = "20260617_2325";
 
 <div class="header">
 	<a class="logo" href="../../" style="background-image:url(../../static_yk/images/logo.png)"></a>
-	<div class="search">
-		<input type="text" placeholder="搜索你想看的影片..." id="search" />
-		<a id="searchDo"></a>
-	</div>
 	<div class="navigate">
 		<a href="../../">精选</a>
 		<a href="../list/dianying/">电影</a>
@@ -52,6 +48,11 @@ $ver = "20260617_2325";
 		<a href="../list/zongyi/">综艺</a>
 		<a href="../list/dongman/">动漫</a>
 	</div>
+	<div class="search">
+		<input type="text" placeholder="搜索你想看的影片..." id="search" />
+		<a id="searchDo"></a>
+	</div>
+	<div class="user-area" id="staticUserArea"><?php echo cms_render_user_area(1); ?></div>
 </div>
 
 <?php if(isset($data['title']) && !empty($data['from'])){ ?>
@@ -65,10 +66,28 @@ $ver = "20260617_2325";
 		<iframe id="playerFrame" frameborder="no" border="0" scrolling="no" allowfullscreen="true" allowtransparency="true"></iframe>
 	</div>
 
+	<!-- 安全防骗警示条 -->
+	<div class="player-safety-tip" id="safetyTip" style="display:none;">
+		<span class="icon">
+			<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+				<line x1="12" y1="9" x2="12" y2="13"></line>
+				<line x1="12" y1="17" x2="12.01" y2="17"></line>
+			</svg>
+		</span>
+		<span class="text"><strong>防骗提示：</strong>视频中内嵌的广告（如棋牌、博彩、招嫖、网贷推广等）均为资源站水印，请勿轻信，谨防上当受骗！</span>
+		<span class="close" id="closeSafetyTip">×</span>
+	</div>
+
 	<div style="display:flex; align-items:center; justify-content:space-between; margin-top:16px; margin-bottom:12px;">
 		<h2 class="video-title" id="videoTitle" style="margin:0;"><?php echo htmlspecialchars($data['title'])?></h2>
 		<button class="detail-fav-btn" id="favoriteBtn" style="flex-shrink:0;">
-			<span class="icon">❤️</span> <span class="text">加入追剧</span>
+			<span class="icon">
+				<svg class="heart-svg" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+				</svg>
+			</span>
+			<span class="text">追剧</span>
 		</button>
 	</div>
 
@@ -133,7 +152,7 @@ $(function(){
 	if (currentVid) {
 		$.getJSON('../../data/index.php', { act: 'favorite_check', vid: currentVid }, function(res) {
 			if (res && res.favorited) {
-				$('#favoriteBtn').addClass('active').find('.text').text('已在追剧');
+				$('#favoriteBtn').addClass('active').find('.text').text('已追');
 			}
 		});
 	}
@@ -151,9 +170,9 @@ $(function(){
 			if (res && res.code === 1) {
 				showToast(res.msg);
 				if (res.action === 'add') {
-					$btn.addClass('active').find('.text').text('已在追剧');
+					$btn.addClass('active').find('.text').text('已追');
 				} else {
-					$btn.removeClass('active').find('.text').text('加入追剧');
+					$btn.removeClass('active').find('.text').text('追剧');
 				}
 			} else {
 				// 未登录，弹出登录弹窗
@@ -161,6 +180,15 @@ $(function(){
 				$('#authModal').addClass('active');
 			}
 		});
+	});
+
+	// 3. 控制防骗警示条显示与收起
+	if (!sessionStorage.getItem('hide_safety_tip')) {
+		$('#safetyTip').css('display', 'flex');
+	}
+	$('#closeSafetyTip').on('click', function(){
+		$('#safetyTip').slideUp(200);
+		sessionStorage.setItem('hide_safety_tip', '1');
 	});
 });
 </script>

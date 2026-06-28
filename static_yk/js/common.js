@@ -3,6 +3,9 @@ $(window).on('pageshow load', function() {
 	if (loader) {
 		loader.classList.remove('show');
 	}
+	if (window.initUserSession) {
+		window.initUserSession();
+	}
 });
 
 $(function(){
@@ -66,8 +69,8 @@ $(function(){
 			return;
 		}
 		
-		// 排除详情页选集区域
-		if ($(this).hasClass('ep-btn') || $(this).closest('.episodes-grid').length > 0) {
+		// 排除详情页选集区域及轮播图指示器
+		if ($(this).hasClass('ep-btn') || $(this).closest('.episodes-grid').length > 0 || $(this).closest('ol').parent().hasClass('slider')) {
 			return;
 		}
 
@@ -491,6 +494,7 @@ $(function(){
 		'    <div class="title-tabs">' +
 		'      <span class="title-tab active" data-target="loginForm">登录</span>' +
 		'      <span class="title-tab" data-target="registerForm">注册</span>' +
+		'      <span class="title-tab" data-target="resetPwdForm">找回密码</span>' +
 		'    </div>' +
 		'    <!-- 登录表单 -->' +
 		'    <form class="auth-form active" id="loginForm" onsubmit="return false;">' +
@@ -503,6 +507,9 @@ $(function(){
 		'        <div class="auth-input-row"><input type="password" name="password" placeholder="请输入密码" required></div>' +
 		'      </div>' +
 		'      <button type="submit" class="auth-submit-btn" id="submitLogin">立即登录</button>' +
+		'      <div style="text-align:center;margin-top:10px;">' +
+		'        <a class="forgot-pwd-link" id="goResetPwd" style="font-size:12px;color:rgba(255,255,255,0.4);cursor:pointer;transition:color .2s;">忘记密码？</a>' +
+		'      </div>' +
 		'    </form>' +
 		'    <!-- 注册表单 -->' +
 		'    <form class="auth-form" id="registerForm" onsubmit="return false;">' +
@@ -527,6 +534,28 @@ $(function(){
 		'      </div>' +
 		'      <button type="submit" class="auth-submit-btn" id="submitRegister">注册并登录</button>' +
 		'    </form>' +
+		'    <!-- 找回密码表单 -->' +
+		'    <form class="auth-form" id="resetPwdForm" onsubmit="return false;">' +
+		'      <div class="auth-group">' +
+		'        <label>注册邮箱</label>' +
+		'        <div class="auth-input-row"><input type="email" name="email" id="resetEmail" placeholder="请输入您的注册邮箱" required></div>' +
+		'      </div>' +
+		'      <div class="auth-group">' +
+		'        <label>邮箱验证码</label>' +
+		'        <div class="auth-input-row">' +
+		'          <input type="text" name="code" placeholder="6位数字" required style="padding-right: 110px !important;">' +
+		'          <button type="button" class="send-code-btn" id="sendResetCodeBtn">发送验证码</button>' +
+		'        </div>' +
+		'      </div>' +
+		'      <div class="auth-group">' +
+		'        <label>设置新密码</label>' +
+		'        <div class="auth-input-row"><input type="password" name="password" placeholder="不低于6位" required></div>' +
+		'      </div>' +
+		'      <button type="submit" class="auth-submit-btn" id="submitResetPwd">重置密码</button>' +
+		'      <div style="text-align:center;margin-top:10px;">' +
+		'        <a class="forgot-pwd-link" id="goBackLogin" style="font-size:12px;color:rgba(255,255,255,0.4);cursor:pointer;transition:color .2s;">返回登录</a>' +
+		'      </div>' +
+		'    </form>' +
 		'  </div>' +
 		'</div>';
 		$('body').append(modalHtml);
@@ -534,52 +563,81 @@ $(function(){
 
 	initAuthModalHTML();
 
-	// 动态插入右上角用户区域
+	// 动态更新和激活静态用户区域
 	function renderUserHeader(user) {
-		$('.header .user-area').remove();
+		var $container = $('#staticUserArea');
+		if ($container.length === 0) return;
+
+		var safeEscape = function(text) {
+			if (!text) return '';
+			return String(text)
+				.replace(/&/g, "&amp;")
+				.replace(/</g, "&lt;")
+				.replace(/>/g, "&gt;")
+				.replace(/"/g, "&quot;")
+				.replace(/'/g, "&#039;");
+		};
+
 		var html = '';
 		if (user) {
 			var firstChar = (user.nickname || user.email || 'U').charAt(0).toUpperCase();
 			html = 
-			'<div class="user-area">' +
 			'  <div class="user-profile" id="userProfileBtn">' +
 			'    <div class="user-avatar">' + firstChar + '</div>' +
-			'    <span class="user-name">' + escapeHtml(user.nickname || '用户') + '</span>' +
+			'    <span class="user-name">' + safeEscape(user.nickname || '用户') + '</span>' +
 			'  </div>' +
 			'  <div class="user-dropdown" id="userDropdownMenu">' +
 			'    <div class="dropdown-header">' +
-			'      <div style="font-weight: bold; font-size: 14px; color: #fff;">' + escapeHtml(user.nickname) + '</div>' +
-			'      <div class="email">' + escapeHtml(user.email) + '</div>' +
+			'      <div style="font-weight: bold; font-size: 14px; color: #fff;">' + safeEscape(user.nickname) + '</div>' +
+			'      <div class="email">' + safeEscape(user.email) + '</div>' +
 			'    </div>' +
-			'    <a href="' + getRootPath() + '" class="dropdown-item">🏠 返回首页</a>' +
-			'    <a href="' + getRootPath() + 'list/search/?fav=1" class="dropdown-item" id="myFavBtn">❤️ 我的追剧</a>' +
-			'    <a class="dropdown-item logout" id="logoutBtn">🚪 退出登录</a>' +
-			'  </div>' +
-			'</div>';
+			'    <a href="' + getRootPath() + '" class="dropdown-item">返回首页</a>' +
+			'    <a href="' + getRootPath() + 'list/search/?fav=1" class="dropdown-item" id="myFavBtn">我的追剧</a>' +
+			'    <a class="dropdown-item logout" id="logoutBtn">退出登录</a>' +
+			'  </div>';
 		} else {
-			html = 
-			'<div class="user-area">' +
-			'  <a class="login-btn" id="navLoginBtn">登录 / 注册</a>' +
-			'</div>';
+			html = '  <a class="login-btn" id="navLoginBtn">登录</a>';
 		}
-		$('.header').append(html);
+		$container.html(html).show();
 	}
 
 	function getRootPath() {
 		return location.pathname.indexOf('/list/') > -1 || location.pathname.indexOf('/play/') > -1 ? '../../' : './';
 	}
 
-	// 初始化请求登录态
+	// 初始化请求登录态（防闪动与并发请求优化）
+	var isUserSessionFetching = false;
 	function initUserSession() {
+		if (isUserSessionFetching) return;
+		isUserSessionFetching = true;
+
 		$.getJSON(getRootPath() + 'data/index.php', { act: 'user_info' }, function(res) {
+			isUserSessionFetching = false;
+			var hasProfileDOM = $('#staticUserArea').find('.user-profile').length > 0;
+			var hasLoginBtnDOM = $('#staticUserArea').find('.login-btn').length > 0;
+
 			if (res && res.code === 1) {
-				renderUserHeader(res.user);
+				// 获取当前页面上已渲染的邮箱
+				var currentEmail = $('#staticUserArea').find('.email').text().trim();
+				var emailInRes = (res.user && res.user.email) ? res.user.email.trim() : '';
+				
+				// 仅在未渲染登录态或信息不一致时执行重绘，避免不必要的 DOM 闪烁
+				if (!hasProfileDOM || currentEmail !== emailInRes) {
+					renderUserHeader(res.user);
+				}
 				syncLocalHistoryToCloud(); // 登录状态下自动上传同步播放记录
 			} else {
-				renderUserHeader(null);
+				// 未登录状态，若当前未渲染登录按钮则执行更新
+				if (!hasLoginBtnDOM) {
+					renderUserHeader(null);
+				}
 			}
+		}).fail(function() {
+			isUserSessionFetching = false;
 		});
 	}
+	window.renderUserHeader = renderUserHeader;
+	window.initUserSession = initUserSession;
 	initUserSession();
 
 	// 绑定登录弹窗显示与关闭
@@ -608,7 +666,7 @@ $(function(){
 		}
 
 		$('#sendCodeBtn').addClass('disabled').text('正在发送...');
-		$.getJSON(getRootPath() + 'data/index.php', { act: 'send_code', email: email }, function(res) {
+		$.getJSON(getRootPath() + 'data/index.php', { act: 'send_code', email: email, type: 'register' }, function(res) {
 			if (res && res.code === 1) {
 				showToast(res.msg);
 				codeCountdown = 60;
@@ -632,16 +690,41 @@ $(function(){
 		});
 	});
 
+	// 注册时邮箱实时查重校验
+	$(document).on('blur change', '#regEmail', function(){
+		var email = $(this).val().trim();
+		if (!email || email.indexOf('@') === -1) return;
+		
+		$.getJSON(getRootPath() + 'data/index.php', { act: 'check_email', email: email }, function(res) {
+			if (res && res.code === 0) {
+				showToast(res.msg, 'error');
+				$('#sendCodeBtn').addClass('disabled');
+				$('#submitRegister').addClass('disabled');
+			} else {
+				if (codeCountdown === 0) {
+					$('#sendCodeBtn').removeClass('disabled');
+				}
+				$('#submitRegister').removeClass('disabled');
+			}
+		});
+	});
+
 	// 登录表单提交
-	$(document).on('submit', '#loginForm', function(){
+	$(document).on('submit', '#loginForm', function(e){
+		e.preventDefault();
 		var email = $(this).find('input[name="email"]').val().trim();
 		var password = $(this).find('input[name="password"]').val().trim();
 		
+		var $btn = $('#submitLogin');
+		if ($btn.hasClass('disabled')) return false;
+
+		$btn.addClass('disabled').text('正在登录...');
 		$.getJSON(getRootPath() + 'data/index.php', {
 			act: 'login',
 			email: email,
 			password: password
 		}, function(res) {
+			$btn.removeClass('disabled').text('立即登录');
 			if (res && res.code === 1) {
 				showToast(res.msg);
 				$('#authModal').removeClass('active');
@@ -651,16 +734,26 @@ $(function(){
 			} else {
 				showToast(res.msg, 'error');
 			}
+		}).fail(function(){
+			$btn.removeClass('disabled').text('立即登录');
+			showToast('登录请求失败，请稍后重试', 'error');
 		});
+
+		return false;
 	});
 
 	// 注册表单提交
-	$(document).on('submit', '#registerForm', function(){
+	$(document).on('submit', '#registerForm', function(e){
+		e.preventDefault();
 		var nickname = $(this).find('input[name="nickname"]').val().trim();
 		var email = $(this).find('input[name="email"]').val().trim();
 		var code = $(this).find('input[name="code"]').val().trim();
 		var password = $(this).find('input[name="password"]').val().trim();
 
+		var $btn = $('#submitRegister');
+		if ($btn.hasClass('disabled')) return false;
+
+		$btn.addClass('disabled').text('正在注册...');
 		$.getJSON(getRootPath() + 'data/index.php', {
 			act: 'register',
 			nickname: nickname,
@@ -668,6 +761,7 @@ $(function(){
 			code: code,
 			password: password
 		}, function(res) {
+			$btn.removeClass('disabled').text('注册并登录');
 			if (res && res.code === 1) {
 				showToast(res.msg);
 				$('#authModal').removeClass('active');
@@ -677,15 +771,120 @@ $(function(){
 			} else {
 				showToast(res.msg, 'error');
 			}
+		}).fail(function(){
+			$btn.removeClass('disabled').text('注册并登录');
+			showToast('注册请求失败，请稍后重试', 'error');
 		});
+
+		return false;
 	});
 
 	// 登出事件绑定
-	$(document).on('click', '#logoutBtn', function(){
+	$(document).on('click', '#logoutBtn', function(e){
+		e.preventDefault();
 		$.getJSON(getRootPath() + 'data/index.php', { act: 'logout' }, function(res) {
 			showToast('已安全退出登录');
-			setTimeout(function(){ location.href = getRootPath(); }, 1000);
+			renderUserHeader(null); // 立即更新 UI，避免界面卡顿在登录态
+			setTimeout(function(){ location.reload(); }, 1000); // 强制重新加载以清空内存会话
+		}).fail(function(){
+			showToast('退出失败，请稍后重试', 'error');
 		});
+		return false;
+	});
+
+	// 忘记密码：点击"忘记密码？"链接 → 切换到找回密码 Tab
+	$(document).on('click', '#goResetPwd', function(){
+		$('.title-tab').removeClass('active');
+		$('.title-tab[data-target="resetPwdForm"]').addClass('active');
+		$('.auth-form').removeClass('active');
+		$('#resetPwdForm').addClass('active');
+	});
+
+	// 找回密码：点击"返回登录"链接 → 切换回登录 Tab
+	$(document).on('click', '#goBackLogin', function(){
+		$('.title-tab').removeClass('active');
+		$('.title-tab[data-target="loginForm"]').addClass('active');
+		$('.auth-form').removeClass('active');
+		$('#loginForm').addClass('active');
+	});
+
+	// 找回密码：发送验证码（独立倒计时）
+	var resetCodeCountdown = 0;
+	var resetCountdownTimer = null;
+	$(document).on('click', '#sendResetCodeBtn', function(){
+		if (resetCodeCountdown > 0) return;
+		var email = $('#resetEmail').val().trim();
+		if (!email || email.indexOf('@') === -1) {
+			showToast('请输入正确的邮箱地址', 'error');
+			return;
+		}
+
+		$('#sendResetCodeBtn').addClass('disabled').text('正在发送...');
+		$.getJSON(getRootPath() + 'data/index.php', { act: 'send_code', email: email, type: 'reset' }, function(res) {
+			if (res && res.code === 1) {
+				showToast(res.msg);
+				resetCodeCountdown = 60;
+				$('#sendResetCodeBtn').text(resetCodeCountdown + 's 后重新发送');
+				resetCountdownTimer = setInterval(function(){
+					resetCodeCountdown--;
+					if (resetCodeCountdown <= 0) {
+						clearInterval(resetCountdownTimer);
+						$('#sendResetCodeBtn').removeClass('disabled').text('发送验证码');
+					} else {
+						$('#sendResetCodeBtn').text(resetCodeCountdown + 's 后重新发送');
+					}
+				}, 1000);
+			} else {
+				showToast(res.msg || '验证码发送失败', 'error');
+				$('#sendResetCodeBtn').removeClass('disabled').text('发送验证码');
+			}
+		}).fail(function(){
+			showToast('请求超时，请检查网络后再试', 'error');
+			$('#sendResetCodeBtn').removeClass('disabled').text('发送验证码');
+		});
+	});
+
+	// 找回密码：表单提交
+	$(document).on('submit', '#resetPwdForm', function(e){
+		e.preventDefault();
+		var email = $(this).find('input[name="email"]').val().trim();
+		var code = $(this).find('input[name="code"]').val().trim();
+		var password = $(this).find('input[name="password"]').val().trim();
+
+		if (password.length < 6) {
+			showToast('新密码长度不能少于6位', 'error');
+			return false;
+		}
+
+		var $btn = $('#submitResetPwd');
+		if ($btn.hasClass('disabled')) return false;
+
+		$btn.addClass('disabled').text('正在重置...');
+		$.getJSON(getRootPath() + 'data/index.php', {
+			act: 'reset_password',
+			email: email,
+			code: code,
+			password: password
+		}, function(res) {
+			$btn.removeClass('disabled').text('重置密码');
+			if (res && res.code === 1) {
+				showToast(res.msg);
+				// 重置成功，自动切回登录 Tab
+				setTimeout(function(){
+					$('.title-tab').removeClass('active');
+					$('.title-tab[data-target="loginForm"]').addClass('active');
+					$('.auth-form').removeClass('active');
+					$('#loginForm').addClass('active');
+				}, 1500);
+			} else {
+				showToast(res.msg || '密码重置失败', 'error');
+			}
+		}).fail(function(){
+			$btn.removeClass('disabled').text('重置密码');
+			showToast('请求失败，请稍后重试', 'error');
+		});
+
+		return false;
 	});
 
 	// 展开和隐藏个人下拉项

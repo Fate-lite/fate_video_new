@@ -2,6 +2,9 @@
 data/fate.db
 data/fate.db-wal
 data/fate.db-shm
+data/user.db
+data/user.db-wal
+data/user.db-shm
 data/test_index.php
 data/test_index2.php
 

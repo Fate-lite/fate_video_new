@@ -3,7 +3,7 @@ if(empty($_GET["vid"])){ header("Location: ../../");die(); }
 require "../data/index.php";
 $raw = data(array("act" => "item","id" => $_GET["vid"]));
 $data = isset($raw['data']) ? $raw['data'] : $raw;
-$ver = "20260617_2325";
+$ver = "20260628_1755";
 ?>
 <!DOCTYPE html>
 <html>

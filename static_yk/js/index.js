@@ -103,7 +103,13 @@ $(function(){
 		function startAuto(){ timer = setInterval(nextSlide, 4000); }
 		function stopAuto(){ clearInterval(timer); }
 
-		dots.on('click', function(){ stopAuto(); goSlide($(this).index()); startAuto(); });
+		slider.on('click', 'ol li', function(e){
+			e.preventDefault();
+			e.stopPropagation();
+			stopAuto();
+			goSlide($(this).index());
+			startAuto();
+		});
 		slider.on('touchstart', stopAuto);
 		slider.on('touchend', startAuto);
 		slider.hover(stopAuto, startAuto);
