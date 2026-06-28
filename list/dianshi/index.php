@@ -9,7 +9,7 @@ $source_param = isset($_GET["source"]) ? $_GET["source"] : "";
 $data = data(array("act" => "list","type" => $type,"filter" => $_GET["condition"],"page" => $_GET["page"],"source" => $source_param));
 
 $titles = array('dianying'=>'电影','dianshi'=>'电视剧','zongyi'=>'综艺','dongman'=>'动漫');
-$ver = "20260628_1755";
+$ver = "20260628_1817";
 ?>
 <!DOCTYPE html>
 <html>

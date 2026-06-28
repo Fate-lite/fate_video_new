@@ -28,7 +28,7 @@ if ($is_fav) {
     $data = data(array("act" => "search", "word" => $_GET["keyword"], "page" => $_GET["page"]));
 }
 
-$ver = "20260628_1755";
+$ver = "20260628_1817";
 ?>
 <!DOCTYPE html>
 <html>
