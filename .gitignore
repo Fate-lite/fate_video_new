@@ -1,0 +1,13 @@
+# SQLite database and temporary files
+data/fate.db
+data/fate.db-wal
+data/fate.db-shm
+data/test_index.php
+data/test_index2.php
+
+# Log files
+error_log
+*.log
+
+# System files
+.DS_Store
