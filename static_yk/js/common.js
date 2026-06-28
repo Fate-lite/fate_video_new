@@ -462,6 +462,269 @@ $(function(){
 			});
 		});
 	}
+
+	/* ─────────────────────────────────────────
+	   第三期：用户中心与云同步交互 JavaScript
+	   ───────────────────────────────────────── */
+
+	// 统一的 Toast 提示
+	window.showToast = function(msg, type) {
+		type = type || 'success';
+		var $toast = $('#toastNotice');
+		if ($toast.length === 0) {
+			$toast = $('<div class="toast-notice" id="toastNotice"></div>');
+			$('body').append($toast);
+		}
+		$toast.removeClass('success error').addClass(type).text(msg).addClass('active');
+		setTimeout(function(){
+			$toast.removeClass('active');
+		}, 3000);
+	};
+
+	// 动态插入登录注册的磨砂 Modal 弹窗到页面
+	function initAuthModalHTML() {
+		if ($('#authModal').length > 0) return;
+		var modalHtml = 
+		'<div class="auth-modal" id="authModal">' +
+		'  <div class="auth-box">' +
+		'    <span class="close-btn" id="closeAuthModal">×</span>' +
+		'    <div class="title-tabs">' +
+		'      <span class="title-tab active" data-target="loginForm">登录</span>' +
+		'      <span class="title-tab" data-target="registerForm">注册</span>' +
+		'    </div>' +
+		'    <!-- 登录表单 -->' +
+		'    <form class="auth-form active" id="loginForm" onsubmit="return false;">' +
+		'      <div class="auth-group">' +
+		'        <label>电子邮箱</label>' +
+		'        <div class="auth-input-row"><input type="email" name="email" placeholder="请输入您的注册邮箱" required></div>' +
+		'      </div>' +
+		'      <div class="auth-group">' +
+		'        <label>登录密码</label>' +
+		'        <div class="auth-input-row"><input type="password" name="password" placeholder="请输入密码" required></div>' +
+		'      </div>' +
+		'      <button type="submit" class="auth-submit-btn" id="submitLogin">立即登录</button>' +
+		'    </form>' +
+		'    <!-- 注册表单 -->' +
+		'    <form class="auth-form" id="registerForm" onsubmit="return false;">' +
+		'      <div class="auth-group">' +
+		'        <label>昵称 (选填)</label>' +
+		'        <div class="auth-input-row"><input type="text" name="nickname" placeholder="不填则为邮箱前缀"></div>' +
+		'      </div>' +
+		'      <div class="auth-group">' +
+		'        <label>常用邮箱</label>' +
+		'        <div class="auth-input-row"><input type="email" name="email" id="regEmail" placeholder="请输入注册邮箱" required></div>' +
+		'      </div>' +
+		'      <div class="auth-group">' +
+		'        <label>邮箱验证码</label>' +
+		'        <div class="auth-input-row">' +
+		'          <input type="text" name="code" placeholder="6位数字" required style="padding-right: 110px !important;">' +
+		'          <button type="button" class="send-code-btn" id="sendCodeBtn">发送验证码</button>' +
+		'        </div>' +
+		'      </div>' +
+		'      <div class="auth-group">' +
+		'        <label>设置密码</label>' +
+		'        <div class="auth-input-row"><input type="password" name="password" placeholder="不低于6位" required></div>' +
+		'      </div>' +
+		'      <button type="submit" class="auth-submit-btn" id="submitRegister">注册并登录</button>' +
+		'    </form>' +
+		'  </div>' +
+		'</div>';
+		$('body').append(modalHtml);
+	}
+
+	initAuthModalHTML();
+
+	// 动态插入右上角用户区域
+	function renderUserHeader(user) {
+		$('.header .user-area').remove();
+		var html = '';
+		if (user) {
+			var firstChar = (user.nickname || user.email || 'U').charAt(0).toUpperCase();
+			html = 
+			'<div class="user-area">' +
+			'  <div class="user-profile" id="userProfileBtn">' +
+			'    <div class="user-avatar">' + firstChar + '</div>' +
+			'    <span class="user-name">' + escapeHtml(user.nickname || '用户') + '</span>' +
+			'  </div>' +
+			'  <div class="user-dropdown" id="userDropdownMenu">' +
+			'    <div class="dropdown-header">' +
+			'      <div style="font-weight: bold; font-size: 14px; color: #fff;">' + escapeHtml(user.nickname) + '</div>' +
+			'      <div class="email">' + escapeHtml(user.email) + '</div>' +
+			'    </div>' +
+			'    <a href="' + getRootPath() + '" class="dropdown-item">🏠 返回首页</a>' +
+			'    <a href="' + getRootPath() + 'list/search/?fav=1" class="dropdown-item" id="myFavBtn">❤️ 我的追剧</a>' +
+			'    <a class="dropdown-item logout" id="logoutBtn">🚪 退出登录</a>' +
+			'  </div>' +
+			'</div>';
+		} else {
+			html = 
+			'<div class="user-area">' +
+			'  <a class="login-btn" id="navLoginBtn">登录 / 注册</a>' +
+			'</div>';
+		}
+		$('.header').append(html);
+	}
+
+	function getRootPath() {
+		return location.pathname.indexOf('/list/') > -1 || location.pathname.indexOf('/play/') > -1 ? '../../' : './';
+	}
+
+	// 初始化请求登录态
+	function initUserSession() {
+		$.getJSON(getRootPath() + 'data/index.php', { act: 'user_info' }, function(res) {
+			if (res && res.code === 1) {
+				renderUserHeader(res.user);
+				syncLocalHistoryToCloud(); // 登录状态下自动上传同步播放记录
+			} else {
+				renderUserHeader(null);
+			}
+		});
+	}
+	initUserSession();
+
+	// 绑定登录弹窗显示与关闭
+	$(document).on('click', '#navLoginBtn', function(){
+		$('#authModal').addClass('active');
+	});
+	$(document).on('click', '#closeAuthModal', function(){
+		$('#authModal').removeClass('active');
+	});
+	$(document).on('click', '.title-tab', function(){
+		$('.title-tab').removeClass('active');
+		$(this).addClass('active');
+		$('.auth-form').removeClass('active');
+		$('#' + $(this).data('target')).addClass('active');
+	});
+
+	// 发送验证码倒计时控制
+	var codeCountdown = 0;
+	var countdownTimer = null;
+	$(document).on('click', '#sendCodeBtn', function(){
+		if (codeCountdown > 0) return;
+		var email = $('#regEmail').val().trim();
+		if (!email || email.indexOf('@') === -1) {
+			showToast('请输入正确的邮箱地址', 'error');
+			return;
+		}
+
+		$('#sendCodeBtn').addClass('disabled').text('正在发送...');
+		$.getJSON(getRootPath() + 'data/index.php', { act: 'send_code', email: email }, function(res) {
+			if (res && res.code === 1) {
+				showToast(res.msg);
+				codeCountdown = 60;
+				$('#sendCodeBtn').text(codeCountdown + 's 后重新发送');
+				countdownTimer = setInterval(function(){
+					codeCountdown--;
+					if (codeCountdown <= 0) {
+						clearInterval(countdownTimer);
+						$('#sendCodeBtn').removeClass('disabled').text('发送验证码');
+					} else {
+						$('#sendCodeBtn').text(codeCountdown + 's 后重新发送');
+					}
+				}, 1000);
+			} else {
+				showToast(res.msg || '验证码发送失败', 'error');
+				$('#sendCodeBtn').removeClass('disabled').text('发送验证码');
+			}
+		}).fail(function(){
+			showToast('请求超时，请检查网络后再试', 'error');
+			$('#sendCodeBtn').removeClass('disabled').text('发送验证码');
+		});
+	});
+
+	// 登录表单提交
+	$(document).on('submit', '#loginForm', function(){
+		var email = $(this).find('input[name="email"]').val().trim();
+		var password = $(this).find('input[name="password"]').val().trim();
+		
+		$.getJSON(getRootPath() + 'data/index.php', {
+			act: 'login',
+			email: email,
+			password: password
+		}, function(res) {
+			if (res && res.code === 1) {
+				showToast(res.msg);
+				$('#authModal').removeClass('active');
+				renderUserHeader(res.user);
+				syncLocalHistoryToCloud(); // 登录成功，立即同步本地记录并覆盖
+				setTimeout(function(){ location.reload(); }, 1000); // 重新加载刷新页面状态
+			} else {
+				showToast(res.msg, 'error');
+			}
+		});
+	});
+
+	// 注册表单提交
+	$(document).on('submit', '#registerForm', function(){
+		var nickname = $(this).find('input[name="nickname"]').val().trim();
+		var email = $(this).find('input[name="email"]').val().trim();
+		var code = $(this).find('input[name="code"]').val().trim();
+		var password = $(this).find('input[name="password"]').val().trim();
+
+		$.getJSON(getRootPath() + 'data/index.php', {
+			act: 'register',
+			nickname: nickname,
+			email: email,
+			code: code,
+			password: password
+		}, function(res) {
+			if (res && res.code === 1) {
+				showToast(res.msg);
+				$('#authModal').removeClass('active');
+				renderUserHeader(res.user);
+				syncLocalHistoryToCloud();
+				setTimeout(function(){ location.reload(); }, 1000);
+			} else {
+				showToast(res.msg, 'error');
+			}
+		});
+	});
+
+	// 登出事件绑定
+	$(document).on('click', '#logoutBtn', function(){
+		$.getJSON(getRootPath() + 'data/index.php', { act: 'logout' }, function(res) {
+			showToast('已安全退出登录');
+			setTimeout(function(){ location.href = getRootPath(); }, 1000);
+		});
+	});
+
+	// 展开和隐藏个人下拉项
+	$(document).on('click', '#userProfileBtn', function(e){
+		e.stopPropagation();
+		$('#userDropdownMenu').toggle();
+	});
+	$(document).on('click', function(){
+		$('#userDropdownMenu').hide();
+	});
+
+	// 播放历史上传同步
+	function syncLocalHistoryToCloud() {
+		var localHistory = [];
+		try {
+			localHistory = JSON.parse(localStorage.getItem('fate_play_history') || '[]');
+		} catch(e){}
+
+		if (localHistory.length === 0) {
+			// 如果本地为空，直接从云端拉取覆盖本地
+			$.getJSON(getRootPath() + 'data/index.php', { act: 'history_sync' }, function(res) {
+				if (res && res.code === 1 && res.history) {
+					localStorage.setItem('fate_play_history', JSON.stringify(res.history));
+				}
+			});
+			return;
+		}
+
+		// 本地有历史，发起合并同步
+		$.post(getRootPath() + 'data/index.php?act=history_sync', {
+			items: JSON.stringify(localHistory)
+		}, function(res) {
+			var parsed = typeof res === 'string' ? JSON.parse(res) : res;
+			if (parsed && parsed.code === 1 && parsed.history) {
+				// 将服务器云端合并后的最终历史记录同步回本地缓存，保障多端一致
+				localStorage.setItem('fate_play_history', JSON.stringify(parsed.history));
+			}
+		}, 'json');
+	}
 });
 
 // 模板解析

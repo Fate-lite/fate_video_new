@@ -72,6 +72,45 @@ function db_create_tables($pdo)
             is_online  INTEGER DEFAULT 0,
             last_check INTEGER NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            email         TEXT    UNIQUE NOT NULL,
+            password_hash TEXT    NOT NULL,
+            nickname      TEXT,
+            created_at    INTEGER NOT NULL,
+            status        INTEGER DEFAULT 1
+        );
+
+        CREATE TABLE IF NOT EXISTS email_verifications (
+            email      TEXT    PRIMARY KEY,
+            code       TEXT    NOT NULL,
+            expire_at  INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS user_history (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL,
+            vid         TEXT    NOT NULL,
+            title       TEXT    NOT NULL,
+            pic         TEXT    NOT NULL,
+            site        TEXT    NOT NULL,
+            episode     TEXT    NOT NULL,
+            progress    INTEGER NOT NULL,
+            updated_at  INTEGER NOT NULL,
+            UNIQUE(user_id, vid)
+        );
+
+        CREATE TABLE IF NOT EXISTS user_favorites (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL,
+            vid         TEXT    NOT NULL,
+            title       TEXT    NOT NULL,
+            pic         TEXT    NOT NULL,
+            created_at  INTEGER NOT NULL,
+            UNIQUE(user_id, vid)
+        );
     ");
 }
 
@@ -363,4 +402,250 @@ function db_file_size()
 {
     $path = dirname(__FILE__) . '/fate.db';
     return file_exists($path) ? filesize($path) : 0;
+}
+
+/* ─────────────────────────────────────────
+   USER & VERIFICATION
+   ───────────────────────────────────────── */
+
+/**
+ * 记录或更新验证码
+ */
+function db_verification_set($email, $code, $expire_sec = 600)
+{
+    $pdo = db_get();
+    if (!$pdo) return false;
+
+    try {
+        $stmt = $pdo->prepare(
+            'INSERT OR REPLACE INTO email_verifications (email, code, expire_at, created_at)
+             VALUES (?, ?, ?, ?)'
+        );
+        $now = time();
+        return $stmt->execute([$email, $code, $now + $expire_sec, $now]);
+    } catch (Exception $e) {
+        error_log('[db] db_verification_set error: ' . $e->getMessage());
+    }
+    return false;
+}
+
+/**
+ * 校验邮箱验证码（一次性校验，校验成功则销毁）
+ */
+function db_verification_verify($email, $code)
+{
+    $pdo = db_get();
+    if (!$pdo) return false;
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT code, expire_at FROM email_verifications WHERE email = ?'
+        );
+        $stmt->execute([$email]);
+        $row = $stmt->fetch();
+        if ($row) {
+            if ($row['code'] === $code && time() < (int)$row['expire_at']) {
+                // 校验成功，销毁该验证码
+                $del_stmt = $pdo->prepare('DELETE FROM email_verifications WHERE email = ?');
+                $del_stmt->execute([$email]);
+                return true;
+            }
+        }
+    } catch (Exception $e) {
+        error_log('[db] db_verification_verify error: ' . $e->getMessage());
+    }
+    return false;
+}
+
+/**
+ * 创建新用户
+ */
+function db_user_create($email, $password, $nickname)
+{
+    $pdo = db_get();
+    if (!$pdo) return false;
+
+    try {
+        $pwd_hash = password_hash($password, PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare(
+            'INSERT INTO users (email, password_hash, nickname, created_at)
+             VALUES (?, ?, ?, ?)'
+        );
+        return $stmt->execute([$email, $pwd_hash, $nickname, time()]);
+    } catch (Exception $e) {
+        error_log('[db] db_user_create error: ' . $e->getMessage());
+    }
+    return false;
+}
+
+/**
+ * 根据邮箱查找用户
+ */
+function db_user_get_by_email($email)
+{
+    $pdo = db_get();
+    if (!$pdo) return null;
+
+    try {
+        $stmt = $pdo->prepare('SELECT id, email, nickname, status FROM users WHERE email = ?');
+        $stmt->execute([$email]);
+        return $stmt->fetch() ?: null;
+    } catch (Exception $e) {
+        error_log('[db] db_user_get_by_email error: ' . $e->getMessage());
+    }
+    return null;
+}
+
+/**
+ * 校验密码登录
+ */
+function db_user_verify_password($email, $password)
+{
+    $pdo = db_get();
+    if (!$pdo) return false;
+
+    try {
+        $stmt = $pdo->prepare('SELECT id, password_hash, status FROM users WHERE email = ?');
+        $stmt->execute([$email]);
+        $row = $stmt->fetch();
+        if ($row && (int)$row['status'] === 1) {
+            if (password_verify($password, $row['password_hash'])) {
+                return $row['id'];
+            }
+        }
+    } catch (Exception $e) {
+        error_log('[db] db_user_verify_password error: ' . $e->getMessage());
+    }
+    return false;
+}
+
+/* ─────────────────────────────────────────
+   USER HISTORY & FAVORITES
+   ───────────────────────────────────────── */
+
+/**
+ * 批量云同步/合并播放历史
+ */
+function db_history_sync($user_id, $items)
+{
+    $pdo = db_get();
+    if (!$pdo || empty($items)) return false;
+
+    try {
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare(
+            'INSERT OR REPLACE INTO user_history (user_id, vid, title, pic, site, episode, progress, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        foreach ($items as $item) {
+            $stmt->execute([
+                $user_id,
+                $item['vid'],
+                $item['title'] ?? '',
+                $item['pic'] ?? '',
+                $item['site'] ?? '',
+                $item['episode'] ?? '',
+                intval($item['progress'] ?? 0),
+                intval($item['updated_at'] ?? time())
+            ]);
+        }
+        $pdo->commit();
+        return true;
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[db] db_history_sync error: ' . $e->getMessage());
+    }
+    return false;
+}
+
+/**
+ * 获取播放历史列表
+ */
+function db_history_list($user_id, $limit = 30)
+{
+    $pdo = db_get();
+    if (!$pdo) return array();
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT vid, title, pic, site, episode, progress, updated_at
+             FROM user_history WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?'
+        );
+        $stmt->execute([$user_id, $limit]);
+        return $stmt->fetchAll() ?: array();
+    } catch (Exception $e) {
+        error_log('[db] db_history_list error: ' . $e->getMessage());
+    }
+    return array();
+}
+
+/**
+ * 切换收藏夹状态
+ */
+function db_favorite_toggle($user_id, $vid, $title, $pic)
+{
+    $pdo = db_get();
+    if (!$pdo) return false;
+
+    try {
+        // 先检查是否存在
+        $stmt = $pdo->prepare('SELECT id FROM user_favorites WHERE user_id = ? AND vid = ?');
+        $stmt->execute([$user_id, $vid]);
+        $row = $stmt->fetch();
+        if ($row) {
+            // 已存在，取消收藏
+            $del = $pdo->prepare('DELETE FROM user_favorites WHERE id = ?');
+            $del->execute([$row['id']]);
+            return array('action' => 'remove');
+        } else {
+            // 不存在，加入收藏
+            $add = $pdo->prepare(
+                'INSERT INTO user_favorites (user_id, vid, title, pic, created_at)
+                 VALUES (?, ?, ?, ?, ?)'
+            );
+            $add->execute([$user_id, $vid, $title, $pic, time()]);
+            return array('action' => 'add');
+        }
+    } catch (Exception $e) {
+        error_log('[db] db_favorite_toggle error: ' . $e->getMessage());
+    }
+    return false;
+}
+
+/**
+ * 获取收藏列表
+ */
+function db_favorite_list($user_id)
+{
+    $pdo = db_get();
+    if (!$pdo) return array();
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT vid, title, pic FROM user_favorites WHERE user_id = ? ORDER BY created_at DESC'
+        );
+        $stmt->execute([$user_id]);
+        return $stmt->fetchAll() ?: array();
+    } catch (Exception $e) {
+        error_log('[db] db_favorite_list error: ' . $e->getMessage());
+    }
+    return array();
+}
+
+/**
+ * 确认影片是否已收藏
+ */
+function db_favorite_check($user_id, $vid)
+{
+    $pdo = db_get();
+    if (!$pdo) return false;
+
+    try {
+        $stmt = $pdo->prepare('SELECT 1 FROM user_favorites WHERE user_id = ? AND vid = ?');
+        $stmt->execute([$user_id, $vid]);
+        return (bool)$stmt->fetch();
+    } catch (Exception $e) {
+        error_log('[db] db_favorite_check error: ' . $e->getMessage());
+    }
+    return false;
 }

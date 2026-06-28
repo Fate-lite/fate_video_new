@@ -5,8 +5,17 @@
  *
  *****/
 
-// 引入 SQLite 数据库封装层
+// 引入 SQLite 数据库封装层与发信层
 require_once dirname(__FILE__) . '/db.php';
+require_once dirname(__FILE__) . '/mail.php';
+
+// 开启会话管理
+if (session_status() === PHP_SESSION_NONE) {
+    // 限制 Cookie 的作用域与安全性
+    ini_set('session.cookie_httponly', 1);
+    ini_set('session.use_only_cookies', 1);
+    session_start();
+}
 
 /***** ⬇配置⬇ *****/
 
@@ -917,9 +926,265 @@ function cms_data_fetch($params)
         case 'item':
             return cms_fetch_item($params);
 
+        case 'send_code':
+            return cms_user_send_code($params);
+
+        case 'register':
+            return cms_user_register($params);
+
+        case 'login':
+            return cms_user_login($params);
+
+        case 'logout':
+            return cms_user_logout();
+
+        case 'user_info':
+            return cms_user_info();
+
+        case 'history_sync':
+            return cms_user_history_sync($params);
+
+        case 'favorite_toggle':
+            return cms_user_favorite_toggle($params);
+
+        case 'favorite_list':
+            return cms_user_favorite_list();
+
+        case 'favorite_check':
+            return cms_user_favorite_check($params);
+
         default:
             return false;
     }
+}
+
+/**
+ * 接口：发送邮箱验证码 (同 Session 60秒防刷限额，验证码10分钟有效)
+ */
+function cms_user_send_code($params)
+{
+    $email = isset($params['email']) ? trim($params['email']) : '';
+    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return array('code' => 0, 'msg' => '请输入合法的邮箱地址');
+    }
+
+    // 防刷限频限制 (60秒)
+    $now = time();
+    if (isset($_SESSION['last_code_time']) && ($now - $_SESSION['last_code_time']) < 60) {
+        return array('code' => 0, 'msg' => '验证码发送频繁，请 ' . (60 - ($now - $_SESSION['last_code_time'])) . ' 秒后再试');
+    }
+
+    // 生成 6 位随机验证码
+    $code = strval(rand(100000, 999999));
+    
+    // 发送 HTML 邮件
+    $subject = '【Fate Video】验证您的邮箱验证码';
+    $body = '
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Helvetica, Arial, sans-serif; background: #0f0f13; border: 1px solid #1a1a24; border-radius: 12px; color: #e6e6e6;">
+        <h2 style="color: #6c5ce7; border-bottom: 2px solid #1a1a24; padding-bottom: 10px; margin-top: 0;">Fate Video 账号验证</h2>
+        <p style="font-size: 15px; line-height: 1.6;">您好！</p>
+        <p style="font-size: 15px; line-height: 1.6;">您正在申请注册或修改 Fate Video 账号。您的安全验证码如下，请在注册框中输入验证：</p>
+        <div style="font-size: 32px; font-weight: bold; color: #ff7675; text-align: center; margin: 30px 0; letter-spacing: 5px; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px dashed rgba(255,255,255,0.08);">' . $code . '</div>
+        <p style="font-size: 13px; color: #8c8c9e; line-height: 1.6;">* 此验证码在 10 分钟内有效，过期后请重新获取。请勿将验证码泄露给他人。</p>
+        <div style="border-top: 1px solid #1a1a24; padding-top: 15px; font-size: 12px; color: #5c5c6e; text-align: center; margin-top: 30px;">
+            本邮件由 Fate Video 自动发送，请勿直接回复。
+        </div>
+    </div>';
+
+    $res = cms_send_mail($email, $subject, $body);
+    if ($res === true) {
+        // 保存验证码到 SQLite，有效期 600 秒
+        db_verification_set($email, $code, 600);
+        $_SESSION['last_code_time'] = $now;
+        return array('code' => 1, 'msg' => '验证码已成功发送至您的邮箱');
+    } else {
+        return array('code' => 0, 'msg' => '发信失败: ' . $res);
+    }
+}
+
+/**
+ * 接口：注册新用户
+ */
+function cms_user_register($params)
+{
+    $email    = isset($params['email']) ? trim($params['email']) : '';
+    $password = isset($params['password']) ? trim($params['password']) : '';
+    $nickname = isset($params['nickname']) ? trim($params['nickname']) : '';
+    $code     = isset($params['code']) ? trim($params['code']) : '';
+
+    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return array('code' => 0, 'msg' => '邮箱格式不正确');
+    }
+    if (strlen($password) < 6) {
+        return array('code' => 0, 'msg' => '密码长度不能少于 6 位');
+    }
+    if (empty($nickname)) {
+        $nickname = explode('@', $email)[0]; // 默认取邮箱前缀作为昵称
+    }
+    if (empty($code)) {
+        return array('code' => 0, 'msg' => '请输入验证码');
+    }
+
+    // 校验邮箱验证码
+    if (!db_verification_verify($email, $code)) {
+        return array('code' => 0, 'msg' => '验证码错误或已过期，请重新获取');
+    }
+
+    // 检查邮箱是否已被注册
+    $exist = db_user_get_by_email($email);
+    if ($exist) {
+        return array('code' => 0, 'msg' => '该邮箱已被注册，请直接登录');
+    }
+
+    // 注册新用户
+    $success = db_user_create($email, $password, $nickname);
+    if ($success) {
+        $user = db_user_get_by_email($email);
+        if ($user) {
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['user_email'] = $user['email'];
+            $_SESSION['user_nickname'] = $user['nickname'];
+            return array('code' => 1, 'msg' => '注册并登录成功', 'user' => $user);
+        }
+    }
+
+    return array('code' => 0, 'msg' => '注册失败，请稍后重试');
+}
+
+/**
+ * 接口：提交登录
+ */
+function cms_user_login($params)
+{
+    $email    = isset($params['email']) ? trim($params['email']) : '';
+    $password = isset($params['password']) ? trim($params['password']) : '';
+
+    if (empty($email) || empty($password)) {
+        return array('code' => 0, 'msg' => '请输入邮箱和密码');
+    }
+
+    $user_id = db_user_verify_password($email, $password);
+    if ($user_id !== false) {
+        $user = db_user_get_by_email($email);
+        if ($user) {
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['user_email'] = $user['email'];
+            $_SESSION['user_nickname'] = $user['nickname'];
+            return array('code' => 1, 'msg' => '登录成功', 'user' => $user);
+        }
+    }
+
+    return array('code' => 0, 'msg' => '邮箱或密码错误，请重新输入');
+}
+
+/**
+ * 接口：登出会话
+ */
+function cms_user_logout()
+{
+    unset($_SESSION['user_id']);
+    unset($_SESSION['user_email']);
+    unset($_SESSION['user_nickname']);
+    return array('code' => 1, 'msg' => '已成功退出登录');
+}
+
+/**
+ * 接口：获取当前登录用户信息
+ */
+function cms_user_info()
+{
+    if (isset($_SESSION['user_id'])) {
+        return array(
+            'code' => 1,
+            'user' => array(
+                'id' => $_SESSION['user_id'],
+                'email' => $_SESSION['user_email'],
+                'nickname' => $_SESSION['user_nickname']
+            )
+        );
+    }
+    return array('code' => 0, 'msg' => '当前未登录');
+}
+
+/**
+ * 接口：云同步播放历史
+ */
+function cms_user_history_sync($params)
+{
+    if (!isset($_SESSION['user_id'])) {
+        return array('code' => 0, 'msg' => '请先登录账号');
+    }
+    $user_id = $_SESSION['user_id'];
+
+    // 接收前台批量上传的历史纪录数据（JSON 格式字符串）
+    $items_raw = isset($params['items']) ? $params['items'] : '';
+    $items = array();
+    if (!empty($items_raw)) {
+        $items = is_string($items_raw) ? json_decode($items_raw, true) : $items_raw;
+    }
+
+    if (!empty($items) && is_array($items)) {
+        db_history_sync($user_id, $items);
+    }
+
+    // 重新拉取最新的 30 条播放历史返回前台
+    $latest = db_history_list($user_id, 30);
+    return array('code' => 1, 'history' => $latest);
+}
+
+/**
+ * 接口：切换影片收藏夹状态
+ */
+function cms_user_favorite_toggle($params)
+{
+    if (!isset($_SESSION['user_id'])) {
+        return array('code' => 0, 'msg' => '请先登录账号');
+    }
+    $user_id = $_SESSION['user_id'];
+
+    $vid   = isset($params['vid']) ? trim($params['vid']) : '';
+    $title = isset($params['title']) ? trim($params['title']) : '';
+    $pic   = isset($params['pic']) ? trim($params['pic']) : '';
+
+    if (empty($vid)) {
+        return array('code' => 0, 'msg' => '缺失影片 ID');
+    }
+
+    $res = db_favorite_toggle($user_id, $vid, $title, $pic);
+    if ($res) {
+        return array('code' => 1, 'action' => $res['action'], 'msg' => $res['action'] === 'add' ? '已成功加入追剧列表' : '已取消追剧');
+    }
+
+    return array('code' => 0, 'msg' => '操作失败');
+}
+
+/**
+ * 接口：获取我的收藏列表
+ */
+function cms_user_favorite_list()
+{
+    if (!isset($_SESSION['user_id'])) {
+        return array('code' => 0, 'msg' => '请先登录账号');
+    }
+    $user_id = $_SESSION['user_id'];
+
+    $fav_list = db_favorite_list($user_id);
+    return array('code' => 1, 'list' => $fav_list);
+}
+
+/**
+ * 接口：确认单片是否已被收藏
+ */
+function cms_user_favorite_check($params)
+{
+    if (!isset($_SESSION['user_id'])) {
+        return array('code' => 1, 'favorited' => false); // 未登录默认未收藏
+    }
+    $user_id = $_SESSION['user_id'];
+    $vid = isset($params['vid']) ? trim($params['vid']) : '';
+
+    $favorited = db_favorite_check($user_id, $vid);
+    return array('code' => 1, 'favorited' => $favorited);
 }
 
 /**

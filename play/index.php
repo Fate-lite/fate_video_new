@@ -65,7 +65,12 @@ $ver = "20260617_2325";
 		<iframe id="playerFrame" frameborder="no" border="0" scrolling="no" allowfullscreen="true" allowtransparency="true"></iframe>
 	</div>
 
-	<h2 class="video-title" id="videoTitle"><?php echo htmlspecialchars($data['title'])?></h2>
+	<div style="display:flex; align-items:center; justify-content:space-between; margin-top:16px; margin-bottom:12px;">
+		<h2 class="video-title" id="videoTitle" style="margin:0;"><?php echo htmlspecialchars($data['title'])?></h2>
+		<button class="detail-fav-btn" id="favoriteBtn" style="flex-shrink:0;">
+			<span class="icon">❤️</span> <span class="text">加入追剧</span>
+		</button>
+	</div>
 
 	<div class="episodes-wrap" id="episodesWrap" style="display:none">
 		<h3>选集</h3>
@@ -118,6 +123,47 @@ $ver = "20260617_2325";
 
 <script src="../../static_yk/js/jquery.min.js"></script>
 <script src="../../static_yk/js/common.js?v=<?php echo $ver; ?>"></script>
+<script>
+$(function(){
+	var currentVid = "<?php echo isset($_GET['vid']) ? addslashes($_GET['vid']) : ''?>";
+	var vTitle = "<?php echo isset($data['title']) ? addslashes($data['title']) : ''?>";
+	var vPic = "<?php echo isset($data['pic']) ? addslashes($data['pic']) : ''?>";
+
+	// 1. 初始化检查该片是否已被收藏
+	if (currentVid) {
+		$.getJSON('../../data/index.php', { act: 'favorite_check', vid: currentVid }, function(res) {
+			if (res && res.favorited) {
+				$('#favoriteBtn').addClass('active').find('.text').text('已在追剧');
+			}
+		});
+	}
+
+	// 2. 绑定收藏/追剧按钮点击事件
+	$('#favoriteBtn').on('click', function(){
+		if (!currentVid) return;
+		var $btn = $(this);
+		$.getJSON('../../data/index.php', {
+			act: 'favorite_toggle',
+			vid: currentVid,
+			title: vTitle,
+			pic: vPic
+		}, function(res) {
+			if (res && res.code === 1) {
+				showToast(res.msg);
+				if (res.action === 'add') {
+					$btn.addClass('active').find('.text').text('已在追剧');
+				} else {
+					$btn.removeClass('active').find('.text').text('加入追剧');
+				}
+			} else {
+				// 未登录，弹出登录弹窗
+				showToast(res.msg || '请先登录账号', 'error');
+				$('#authModal').addClass('active');
+			}
+		});
+	});
+});
+</script>
 <script src="../../static_yk/js/play.js?v=<?php echo $ver; ?>"></script>
 </body>
 </html>

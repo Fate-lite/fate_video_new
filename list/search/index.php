@@ -1,8 +1,33 @@
 <?php
-if(!isset($_GET["keyword"])){ header("Location: ../../");die(); }
-if(!isset($_GET["page"]) || !is_numeric($_GET["page"]) || $_GET["page"] < 1){ $_GET["page"] = 1; }
 require "../../data/index.php";
-$data = data(array("act" => "search","word" => $_GET["keyword"],"page" => $_GET["page"]));
+
+$is_fav = isset($_GET['fav']) && $_GET['fav'] == 1;
+
+if (!$is_fav && !isset($_GET["keyword"])) {
+    header("Location: ../../");
+    die();
+}
+
+if (!isset($_GET["page"]) || !is_numeric($_GET["page"]) || $_GET["page"] < 1) {
+    $_GET["page"] = 1;
+}
+
+if ($is_fav) {
+    // 检查是否登录
+    if (!isset($_SESSION['user_id'])) {
+        header("Location: ../../?login_required=1");
+        die();
+    }
+    $res = data(array("act" => "favorite_list"));
+    $data = array(
+        'list' => isset($res['list']) ? $res['list'] : array(),
+        'hasmore' => false
+    );
+    $_GET['keyword'] = '我的追剧';
+} else {
+    $data = data(array("act" => "search", "word" => $_GET["keyword"], "page" => $_GET["page"]));
+}
+
 $ver = "20260617_2325";
 ?>
 <!DOCTYPE html>
@@ -24,7 +49,7 @@ $ver = "20260617_2325";
 })();
 </script>
 <link href="../../static_yk/images/icon-192.png" rel="shortcut icon">
-<title><?php echo htmlspecialchars($_GET['keyword'])?> - 搜索结果 - Fate视频</title>
+<title><?php echo $is_fav ? '我的追剧' : htmlspecialchars($_GET['keyword'])?> - Fate视频</title>
 <link rel="manifest" href="../../manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -37,7 +62,7 @@ $ver = "20260617_2325";
 <div class="header">
 	<a class="logo" href="../../" style="background-image:url(../../static_yk/images/logo.png)"></a>
 	<div class="search">
-		<input type="text" placeholder="搜索你想看的影片..." id="search" value="<?php echo htmlspecialchars($_GET['keyword'])?>" />
+		<input type="text" placeholder="搜索你想看的影片..." id="search" value="<?php echo $is_fav ? '' : htmlspecialchars($_GET['keyword'])?>" />
 		<a id="searchDo"></a>
 	</div>
 	<div class="navigate">
@@ -50,26 +75,34 @@ $ver = "20260617_2325";
 </div>
 
 <div class="main-wrap">
-	<div class="search-result">"<b><?php echo htmlspecialchars($_GET['keyword'])?></b>" 的搜索结果</div>
+	<div class="search-result">
+		<?php echo $is_fav ? '❤️ 我的追剧收藏' : '"<b>' . htmlspecialchars($_GET['keyword']) . '</b>" 的搜索结果'?>
+	</div>
 
 	<?php if(!isset($data['list']) || count($data['list']) === 0){ ?>
-	<div class="no-data">没有找到相关影片，请尝试其他关键词</div>
+	<div class="no-data">
+		<?php echo $is_fav ? '您还没有收藏过任何影片，在播放页面点击“加入追剧”即可同步到此云端列表。' : '没有找到相关影片，请尝试其他关键词'?>
+	</div>
 	<?php }else{ ?>
 	<div class="video-grid">
 		<?php foreach($data['list'] as $v){ ?>
-		<a href="../../play/?vid=<?php echo urlencode($v['id'])?>" class="video-card">
+		<a href="../../play/?vid=<?php echo urlencode($v['id'] ?? $v['vid'])?>" class="video-card">
 			<div class="poster">
 				<img src="<?php echo htmlspecialchars($v['pic'])?>" alt="<?php echo htmlspecialchars($v['title'])?>" loading="lazy">
-				<?php if($v['hint']){ ?><span class="badge"><?php echo htmlspecialchars($v['hint'])?></span><?php } ?>
+				<?php if(isset($v['hint']) && $v['hint']){ ?><span class="badge"><?php echo htmlspecialchars($v['hint'])?></span><?php } ?>
 			</div>
 			<div class="info"><div class="name"><?php echo htmlspecialchars($v['title'])?></div></div>
 		</a>
 		<?php } ?>
 	</div>
+	
+	<?php if(!$is_fav){ ?>
 	<div class="pagination">
 		<a href="./?keyword=<?php echo urlencode($_GET['keyword'])?>&page=<?php echo $_GET['page'] - 1?>"<?php echo $_GET['page'] <= 1 ? ' class="disabled"' : ''?>>← 上一页</a>
 		<a href="./?keyword=<?php echo urlencode($_GET['keyword'])?>&page=<?php echo $_GET['page'] + 1?>"<?php echo !$data['hasmore'] ? ' class="disabled"' : ''?>>下一页 →</a>
 	</div>
+	<?php } ?>
+	
 	<?php } ?>
 </div>
 
