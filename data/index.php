@@ -17,6 +17,21 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// 自动响应直接以 AJAX 或 HTTP 访问的 API 请求
+if (isset($_REQUEST['act']) && in_array($_REQUEST['act'], ['send_code', 'register', 'login', 'logout', 'user_info', 'history_sync', 'favorite_toggle', 'favorite_list', 'favorite_check'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    
+    // 如果是 POST 发来的 JSON 体，解析它
+    $raw_input = file_get_contents('php://input');
+    $post_params = json_decode($raw_input, true) ?: array();
+    
+    $params = array_merge($_GET, $_POST, $post_params);
+    $res = cms_data_fetch($params);
+    
+    echo json_encode($res === false ? array('code' => 0, 'msg' => 'Invalid action') : $res, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 /***** ⬇配置⬇ *****/
 
 // 动态载入采集源配置，如不存在或非数组则自动恢复默认配置
