@@ -737,12 +737,12 @@ img{max-width:100%;display:block}
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 6px;
+        gap: 4px;
         overflow: hidden;
     }
     .logo{
-        width:70px;
-        height:20px;
+        width: 60px;
+        height: 18px;
         flex-shrink: 0;
     }
     
@@ -750,7 +750,7 @@ img{max-width:100%;display:block}
     .header .search {
         flex-shrink: 0;
         max-width: none;
-        margin-left: 2px !important;
+        margin: 0 !important;
         order: 3;
     }
     .header .search input {
@@ -758,14 +758,14 @@ img{max-width:100%;display:block}
     }
     .header .search a#searchDo {
         margin-left: 0 !important;
-        width: 32px;
-        height: 32px;
+        width: 30px;
+        height: 30px;
         background-color: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.05);
         border-radius: 50%;
     }
     .header .user-area {
-        margin-left: 4px;
+        margin: 0 0 0 2px !important;
         flex-shrink: 0;
         order: 4;
         display: block !important;
@@ -785,8 +785,8 @@ img{max-width:100%;display:block}
         order: 2;
         flex: 1;
         min-width: 0;
-        margin: 0 6px !important;
-        gap: 2px;
+        margin: 0 4px !important;
+        gap: 0px;
         overflow-x: auto;
         white-space: nowrap;
         -webkit-overflow-scrolling: touch;
@@ -798,8 +798,8 @@ img{max-width:100%;display:block}
         display: none !important;
     }
     .navigate a{
-        padding: 6px 8px;
-        font-size: 12.5px;
+        padding: 6px 6px;
+        font-size: 12px;
         flex-shrink: 0;
         white-space: nowrap;
     }
