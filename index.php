@@ -1,11 +1,5 @@
 <?php
 require "./data/index.php";
-if (isset($_GET['clear_cache'])) {
-    require_once "./data/db.php";
-    db_cache_clear();
-    echo "Web Cache Cleared!";
-    exit;
-}
 $data = data(array("act" => "index"));
 $ver = "20260617_2325";
 ?>
