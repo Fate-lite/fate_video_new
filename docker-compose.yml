@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  fate-video-next:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fate-video-next-app
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      # 持久化挂载宿主机的 data 目录，确保 SQLite 数据库文件永不丢失
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
