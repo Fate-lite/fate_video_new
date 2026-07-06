@@ -12,8 +12,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# 设置环境变量以确保 Prisma Client 在容器编译期间正确加载经典动态库
-ENV PRISMA_CLIENT_ENGINE_TYPE=library
+# Prisma generate
 RUN DATABASE_URL="file:./data/user.db" npx prisma generate --schema=prisma/user.prisma && \
     DATABASE_URL="file:./data/fate.db" npx prisma generate --schema=prisma/cache.prisma
 
@@ -36,7 +35,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/.env ./.env
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
