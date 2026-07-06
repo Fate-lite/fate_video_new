@@ -1,6 +1,6 @@
 # 1. 基础依赖安装阶段
 FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -8,6 +8,7 @@ RUN npm ci
 
 # 2. 编译打包阶段
 FROM node:20-alpine AS builder
+RUN apk add --no-cache openssl
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -16,10 +17,16 @@ COPY . .
 RUN DATABASE_URL="file:./data/user.db" npx prisma generate --schema=prisma/user.prisma && \
     DATABASE_URL="file:./data/fate.db" npx prisma generate --schema=prisma/cache.prisma
 
+# 创建临时空数据库以支持 Next.js 预渲染
+RUN mkdir -p data && \
+    DATABASE_URL="file:./data/user.db" npx prisma db push --schema=prisma/user.prisma --skip-generate --accept-data-loss && \
+    DATABASE_URL="file:./data/fate.db" npx prisma db push --schema=prisma/cache.prisma --skip-generate --accept-data-loss
+
 RUN npm run build
 
 # 3. 生产运行阶段
 FROM node:20-alpine AS runner
+RUN apk add --no-cache openssl
 WORKDIR /app
 
 ENV NODE_ENV=production
