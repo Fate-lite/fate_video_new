@@ -202,7 +202,9 @@ function data($random, $return_json = false)
     }
 
     $data = data_cache_get($cache_key, $return_json);
-    if ($data === false) {
+    
+    // 强力容错：如果缓存读取为 false、null 或非数组（对于 API 获取），则判定失效重新请求
+    if ($data === false || $data === null || ($return_json === false && !is_array($data))) {
 
         if ($return_json === true) {
             $params = json_decode($random, true);
@@ -215,7 +217,9 @@ function data($random, $return_json = false)
         }
 
         $data = cms_data_fetch($params);
-        if ($data !== false) {
+        
+        // 仅在获取到有效非空数据时才写入缓存，防止空或 false 脏数据污染数据库
+        if ($data !== false && $data !== null && (!empty($data) || $return_json === true)) {
             data_cache_set($cache_key, $return_json, $data);
         }
     }
@@ -226,13 +230,13 @@ function data($random, $return_json = false)
         if (!preg_match('/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/', $callback)) {
             die('/* invalid callback */');
         }
-        // 输出内容使用 modifier_encode 混淆以向下兼容原本的 $.getJS 解密
+        // 输出内容使用 modifier_encode 混淆以向下兼容原本 of $.getJS 解密
         $raw_str = json_encode($data);
         $encrypted_str = modifier_encode($raw_str);
         echo $callback . '(' . json_encode($encrypted_str) . ')';
         die();
     } else {
-        return $data;
+        return is_array($data) ? $data : array();
     }
 }
 

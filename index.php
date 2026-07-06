@@ -1,6 +1,7 @@
 <?php
 require "./data/index.php";
 $data = data(array("act" => "index"));
+$data = is_array($data) ? $data : array();
 $ver = "20260628_1822";
 ?>
 <!DOCTYPE html>
@@ -107,7 +108,7 @@ $ver = "20260628_1822";
 			<a href="<?php echo $links[$key]?>">查看更多 →</a>
 		</div>
 		<div class="video-grid" id="<?php echo $key?>List">
-			<?php foreach($data[$key] as $v){ ?>
+			<?php foreach(($data[$key] ?? array()) as $v){ ?>
 			<a href="./play/?vid=<?php echo urlencode($v['id'])?>" class="video-card">
 				<div class="poster">
 					<img src="<?php echo htmlspecialchars($v['pic'])?>" alt="<?php echo htmlspecialchars($v['title'])?>" loading="lazy">
