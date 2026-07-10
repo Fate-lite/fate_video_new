@@ -7,17 +7,17 @@ const globalForPrisma = globalThis as unknown as {
   cachePrisma: CacheClient | undefined;
 };
 
-// 使用 path.resolve 和 process.cwd() 将相对路径强制转换为绝对路径，规避 Next.js 预渲染时工作目录变化导致的“无法打开数据库”错误。
-const userDbPath = path.resolve(process.cwd(), "data/user.db");
-const cacheDbPath = path.resolve(process.cwd(), "data/fate.db");
+// 优先使用环境变量中的绝对路径，否则回退到 process.cwd() 动态转换
+const userDbUrl =
+  process.env.USER_DB_URL || `file:${path.resolve(process.cwd(), "data/user.db")}`;
+const cacheDbUrl =
+  process.env.CACHE_DB_URL || `file:${path.resolve(process.cwd(), "data/fate.db")}`;
 
 export const userDb =
   globalForPrisma.userPrisma ??
   new UserClient({
     datasources: {
-      db: {
-        url: `file:${userDbPath}`,
-      },
+      db: { url: userDbUrl },
     },
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
@@ -26,9 +26,7 @@ export const cacheDb =
   globalForPrisma.cachePrisma ??
   new CacheClient({
     datasources: {
-      db: {
-        url: `file:${cacheDbPath}`,
-      },
+      db: { url: cacheDbUrl },
     },
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
