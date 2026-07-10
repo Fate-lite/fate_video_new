@@ -1,6 +1,6 @@
 import React from "react";
-import Link from "next/link";
 import { getCategoryVideos } from "@/lib/collector";
+import { VideoCard } from "@/components/CategorySection";
 
 export const revalidate = 3600; // 缓存 1 小时自动后台重新生成
 
@@ -47,39 +47,7 @@ export default async function ListPage({ params }: ListPageProps) {
       ) : (
         <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
           {list.map((v) => (
-            <Link
-              key={v.id}
-              href={`/play?title=${encodeURIComponent(v.title)}&type=${v.type}`}
-              className="group block relative overflow-hidden rounded-2xl transition-all duration-300"
-            >
-              <div className="aspect-[3/4] relative overflow-hidden rounded-2xl bg-white/5 border border-white/5 group-hover:border-indigo-500/30 transition-all duration-300">
-                <img
-                  src={v.pic || "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400&auto=format&fit=crop"}
-                  alt={v.title}
-                  loading="lazy"
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400&auto=format&fit=crop";
-                  }}
-                />
-
-                {v.note && (
-                  <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[9px] font-bold glass-card text-pink-400 bg-black/60 border border-white/10 scale-90 origin-top-right">
-                    {v.note}
-                  </span>
-                )}
-
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-3">
-                  <span className="text-[10px] font-bold text-indigo-300 tracking-wider">点击开始播放</span>
-                </div>
-              </div>
-
-              <div className="mt-2.5 px-1">
-                <h3 className="text-xs font-bold text-white/80 group-hover:text-indigo-400 transition-colors truncate">
-                  {v.title}
-                </h3>
-              </div>
-            </Link>
+            <VideoCard key={v.id} v={v} />
           ))}
         </div>
       )}
