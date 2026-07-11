@@ -101,3 +101,11 @@ body::after {
 .hide-scrollbar::-webkit-scrollbar {
   display: none; /* Chrome, Safari and Opera */
 }
+
+/* 骨架屏流光闪烁动画 */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+

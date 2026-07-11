@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import { VideoGridSkeleton } from "@/components/Skeletons";
 
 interface HistoryItem {
   id: number;
@@ -14,6 +15,8 @@ interface HistoryItem {
   progress: number;
   updated_at: number;
 }
+
+const FALLBACK_IMG = "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400&auto=format&fit=crop";
 
 export default function HistoryPage() {
   const { user, loading: authLoading } = useAuth();
@@ -37,16 +40,7 @@ export default function HistoryPage() {
     }
   }, [user, authLoading]);
 
-  if (authLoading || (loading && list.length === 0)) {
-    return (
-      <div className="w-full py-20 flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <div className="text-sm text-white/40">加载播放历史记录中...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
+  if (!authLoading && !user) {
     return (
       <div className="w-full max-w-md mx-auto my-20 text-center glass-card rounded-3xl border border-white/5 p-8">
         <h2 className="text-lg font-bold text-white/90">请先登录您的账号</h2>
@@ -70,7 +64,15 @@ export default function HistoryPage() {
         <p className="text-xs text-white/40 mt-1">系统为您保存最近观看的 50 条视频记录</p>
       </div>
 
-      {list.length === 0 ? (
+      {authLoading || (loading && list.length === 0) ? (
+        <div className="flex flex-col gap-6">
+          <div className="text-xs text-white/40 font-semibold tracking-wider flex items-center gap-2 mb-2 animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
+            正在努力加载您的云端播放记录，请稍后...
+          </div>
+          <VideoGridSkeleton count={10} />
+        </div>
+      ) : list.length === 0 ? (
         <div className="glass-card rounded-3xl p-12 text-center border border-white/5">
           <svg className="w-12 h-12 text-white/20 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           <h2 className="text-sm font-bold text-white/70 mt-4">暂无播放历史</h2>
@@ -92,11 +94,11 @@ export default function HistoryPage() {
               {/* 海报 */}
               <div className="aspect-[3/4] relative overflow-hidden bg-white/5">
                 <img
-                  src={item.pic || "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400&auto=format&fit=crop"}
+                  src={item.pic || FALLBACK_IMG}
                   alt={item.title}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400&auto=format&fit=crop";
+                    (e.target as HTMLImageElement).src = FALLBACK_IMG;
                   }}
                 />
                 
@@ -118,7 +120,7 @@ export default function HistoryPage() {
                 </div>
 
                 <Link
-                  href={`/play?title=${encodeURIComponent(item.title)}&type=dianying`} // 容错处理
+                  href={`/play?title=${encodeURIComponent(item.title)}&type=dianying`}
                   className="w-full text-center py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-[10px] font-bold transition-all"
                 >
                   继续续播 →

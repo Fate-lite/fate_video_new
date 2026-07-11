@@ -4,11 +4,13 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
+type AuthMode = "login" | "register" | "reset";
+
 export default function AuthPage() {
   const { login, user } = useAuth();
   const router = useRouter();
 
-  const [isLoginTab, setIsLoginTab] = useState(true);
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -33,20 +35,25 @@ export default function AuthPage() {
     }
   }, [countdown]);
 
-  // 发送验证码
+  // 重置消息横幅
+  const clearMessages = () => {
+    setErrorMsg("");
+    setSuccessMsg("");
+  };
+
+  // 发送验证码 (支持 register 和 reset)
   const handleSendCode = async () => {
     if (!email) {
       setErrorMsg("请先输入您的邮箱地址");
       return;
     }
-    setErrorMsg("");
-    setSuccessMsg("");
+    clearMessages();
 
     try {
       const res = await fetch("/api/auth/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, type: "register" }),
+        body: JSON.stringify({ email, type: authMode === "reset" ? "reset" : "register" }),
       });
       const data = await res.json();
       if (data.success) {
@@ -60,24 +67,32 @@ export default function AuthPage() {
     }
   };
 
-  // 提交登录/注册
+  // 提交登录/注册/密码重置
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg("");
-    setSuccessMsg("");
+    clearMessages();
 
     if (!email || !password) {
       setErrorMsg("请填写所有必填信息");
       return;
     }
-    if (!isLoginTab && !code) {
-      setErrorMsg("注册账号必须填写邮箱验证码");
+    if (authMode !== "login" && !code) {
+      setErrorMsg("必须填写邮箱验证码");
       return;
     }
 
     setLoading(true);
-    const apiEndpoint = isLoginTab ? "/api/auth/login" : "/api/auth/register";
-    const bodyPayload = isLoginTab ? { email, password } : { email, password, code };
+
+    let apiEndpoint = "/api/auth/login";
+    let bodyPayload: any = { email, password };
+
+    if (authMode === "register") {
+      apiEndpoint = "/api/auth/register";
+      bodyPayload = { email, password, code };
+    } else if (authMode === "reset") {
+      apiEndpoint = "/api/auth/reset-password";
+      bodyPayload = { email, password, code };
+    }
 
     try {
       const res = await fetch(apiEndpoint, {
@@ -89,15 +104,19 @@ export default function AuthPage() {
       setLoading(false);
 
       if (data.success) {
-        setSuccessMsg(data.msg || (isLoginTab ? "登录成功！" : "注册成功，正在跳转登录..."));
-        
-        if (isLoginTab) {
+        if (authMode === "login") {
+          setSuccessMsg(data.msg || "登录成功！");
           login(data.user);
           router.push("/");
-        } else {
-          // 注册成功自动切换到登录 TAB，并清空验证码
-          setIsLoginTab(true);
+        } else if (authMode === "register") {
+          setSuccessMsg(data.msg || "注册成功，正在跳转登录...");
+          setAuthMode("login");
           setCode("");
+        } else {
+          setSuccessMsg(data.msg || "密码已成功重置，请登录！");
+          setAuthMode("login");
+          setCode("");
+          setPassword("");
         }
       } else {
         setErrorMsg(data.msg || "操作失败");
@@ -110,54 +129,71 @@ export default function AuthPage() {
 
   return (
     <div className="w-full max-w-md mx-auto my-12 md:my-20">
-      <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 shadow-2xl relative overflow-hidden">
+      <div className="glass-card rounded-3xl p-6 md:p-8 border border-white/5 shadow-2xl relative overflow-hidden transition-all duration-300">
         
         {/* 卡片流光斑点装饰 */}
         <div className="absolute -top-12 -left-12 w-24 h-24 rounded-full bg-indigo-500/10 blur-xl"></div>
         <div className="absolute -bottom-12 -right-12 w-24 h-24 rounded-full bg-pink-500/10 blur-xl"></div>
 
         {/* 顶部 TAB 切换键 */}
-        <div className="flex bg-white/5 rounded-2xl p-1 mb-8">
-          <button
-            onClick={() => {
-              setIsLoginTab(true);
-              setErrorMsg("");
-              setSuccessMsg("");
-            }}
-            className={`flex-1 text-center py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              isLoginTab ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" : "text-white/40 hover:text-white"
-            }`}
-          >
-            账号登录
-          </button>
-          <button
-            onClick={() => {
-              setIsLoginTab(false);
-              setErrorMsg("");
-              setSuccessMsg("");
-            }}
-            className={`flex-1 text-center py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              !isLoginTab ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" : "text-white/40 hover:text-white"
-            }`}
-          >
-            新用户注册
-          </button>
-        </div>
+        {authMode !== "reset" ? (
+          <div className="flex bg-white/5 rounded-2xl p-1 mb-8">
+            <button
+              onClick={() => {
+                setAuthMode("login");
+                clearMessages();
+              }}
+              className={`flex-1 text-center py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                authMode === "login" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" : "text-white/40 hover:text-white"
+              }`}
+            >
+              账号登录
+            </button>
+            <button
+              onClick={() => {
+                setAuthMode("register");
+                clearMessages();
+              }}
+              className={`flex-1 text-center py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                authMode === "register" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" : "text-white/40 hover:text-white"
+              }`}
+            >
+              新用户注册
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between mb-8">
+            <button
+              onClick={() => {
+                setAuthMode("login");
+                clearMessages();
+              }}
+              className="text-xs text-white/60 hover:text-white transition-colors flex items-center gap-1 cursor-pointer font-semibold"
+            >
+              <span>←</span> 返回登录
+            </button>
+            <span className="text-xs font-extrabold text-indigo-400">重置账号密码</span>
+          </div>
+        )}
 
         {/* 标题 */}
         <div className="text-center mb-6">
-          <h2 className="text-lg font-black text-white">{isLoginTab ? "欢迎回来" : "加入 Fate Video"}</h2>
-          <p className="text-[10px] text-white/35 mt-1">云端保存播放历史，手机与电脑跨端同步</p>
+          <h2 className="text-lg font-black text-white">
+            {authMode === "login" ? "欢迎回来" : authMode === "register" ? "加入 Fate Video" : "找回您的账户密码"}
+          </h2>
+          <p className="text-[10px] text-white/35 mt-1">
+            {authMode === "reset" ? "通过发送验证码确认安全凭证" : "云端保存播放历史，手机与电脑跨端同步"}
+          </p>
         </div>
 
         {/* 错误与成功消息横幅 */}
         {errorMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold">
+          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold animate-in fade-in duration-200">
             {errorMsg}
           </div>
         )}
         {successMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-semibold">
+          <div className="mb-4 p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-semibold animate-in fade-in duration-200">
             {successMsg}
           </div>
         )}
@@ -177,7 +213,9 @@ export default function AuthPage() {
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wide mb-1.5">账户密码</label>
+            <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wide mb-1.5">
+              {authMode === "reset" ? "设定的新密码" : "账户密码"}
+            </label>
             <input
               type="password"
               value={password}
@@ -188,8 +226,8 @@ export default function AuthPage() {
             />
           </div>
 
-          {/* 注册专属：验证码输入框 */}
-          {!isLoginTab && (
+          {/* 注册/重置专属：验证码输入框 */}
+          {authMode !== "login" && (
             <div>
               <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wide mb-1.5">邮箱验证码</label>
               <div className="flex gap-2">
@@ -218,6 +256,22 @@ export default function AuthPage() {
             </div>
           )}
 
+          {/* 登录专属：忘记密码快捷入口 */}
+          {authMode === "login" && (
+            <div className="flex justify-end -mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("reset");
+                  clearMessages();
+                }}
+                className="text-[10px] font-semibold text-white/40 hover:text-indigo-400 transition-colors cursor-pointer"
+              >
+                忘记密码？
+              </button>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -225,10 +279,12 @@ export default function AuthPage() {
           >
             {loading ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : isLoginTab ? (
+            ) : authMode === "login" ? (
               "安全登录"
-            ) : (
+            ) : authMode === "register" ? (
               "同意协议并注册"
+            ) : (
+              "确 认 重 置"
             )}
           </button>
         </form>

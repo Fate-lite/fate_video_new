@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import { VideoGridSkeleton } from "@/components/Skeletons";
 
 interface FavoriteItem {
   id: number;
@@ -11,6 +12,8 @@ interface FavoriteItem {
   pic: string;
   created_at: number;
 }
+
+const FALLBACK_IMG = "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400&auto=format&fit=crop";
 
 export default function FavoritesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -51,16 +54,7 @@ export default function FavoritesPage() {
     } catch {}
   };
 
-  if (authLoading || (loading && list.length === 0)) {
-    return (
-      <div className="w-full py-20 flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <div className="text-sm text-white/40">加载我的追剧清单中...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
+  if (!authLoading && !user) {
     return (
       <div className="w-full max-w-md mx-auto my-20 text-center glass-card rounded-3xl border border-white/5 p-8">
         <h2 className="text-lg font-bold text-white/90">请先登录您的账号</h2>
@@ -84,7 +78,15 @@ export default function FavoritesPage() {
         <p className="text-xs text-white/40 mt-1">云端为您珍藏并实时跟踪每一部心仪的好片</p>
       </div>
 
-      {list.length === 0 ? (
+      {authLoading || (loading && list.length === 0) ? (
+        <div className="flex flex-col gap-6">
+          <div className="text-xs text-white/40 font-semibold tracking-wider flex items-center gap-2 mb-2 animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
+            正在加载您的收藏追剧，请稍后...
+          </div>
+          <VideoGridSkeleton count={12} />
+        </div>
+      ) : list.length === 0 ? (
         <div className="glass-card rounded-3xl p-12 text-center border border-white/5">
           <span className="text-4xl block text-white/10 mb-4">♥</span>
           <h2 className="text-sm font-bold text-white/70">还没有添加追剧收藏哦</h2>
@@ -105,12 +107,12 @@ export default function FavoritesPage() {
             >
               <div className="aspect-[3/4] relative overflow-hidden rounded-2xl bg-white/5 border border-white/5 group-hover:border-indigo-500/30 transition-all duration-300">
                 <img
-                  src={item.pic || "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400&auto=format&fit=crop"}
+                  src={item.pic || FALLBACK_IMG}
                   alt={item.title}
                   loading="lazy"
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400&auto=format&fit=crop";
+                    (e.target as HTMLImageElement).src = FALLBACK_IMG;
                   }}
                 />
 

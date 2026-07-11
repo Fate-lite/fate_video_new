@@ -141,6 +141,51 @@ export async function loginUser(email: string, password: string): Promise<{ succ
   return { success: true, msg: "登录成功", user: { id: user.id, email: user.email, nickname: user.nickname } };
 }
 
+// 3.5 密码重置
+export async function resetPassword(email: string, newPassword: string, code: string): Promise<{ success: boolean; msg: string }> {
+  const normalizedEmail = email.toLowerCase().trim();
+  const now = Math.floor(Date.now() / 1000);
+
+  // 1. 校验验证码 (type = "reset")
+  const verification = await userDb.email_verifications.findFirst({
+    where: {
+      email: normalizedEmail,
+      code,
+      type: "reset",
+      expire_at: { gt: now },
+    },
+    orderBy: { created_at: "desc" },
+  });
+
+  if (!verification) {
+    return { success: false, msg: "验证码无效或已过期" };
+  }
+
+  // 2. 检查用户是否存在
+  const user = await userDb.users.findUnique({
+    where: { email: normalizedEmail },
+  });
+
+  if (!user) {
+    return { success: false, msg: "未找到该邮箱关联的账号" };
+  }
+
+  // 3. 更新密码
+  const passwordHash = hashPassword(newPassword, normalizedEmail);
+  await userDb.users.update({
+    where: { email: normalizedEmail },
+    data: { password_hash: passwordHash },
+  });
+
+  // 4. 清理已被使用的验证码
+  await userDb.email_verifications.deleteMany({
+    where: { email: normalizedEmail },
+  });
+
+  return { success: true, msg: "密码重置成功，请使用新密码登录" };
+}
+
+
 // 4. 播放历史增删改查
 export async function addPlayHistory(
   userId: number,

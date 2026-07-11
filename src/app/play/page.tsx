@@ -3,8 +3,9 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { PlayDetailSkeleton } from "@/components/Skeletons";
 import VideoPlayer from "@/components/VideoPlayer";
-import { Video, VideoPlayGroup } from "@/lib/collector";
+import type { Video } from "@/lib/collector";
 
 function PlayContent() {
   const { user } = useAuth();
@@ -100,12 +101,7 @@ function PlayContent() {
   };
 
   if (loading) {
-    return (
-      <div className="w-full py-20 flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <div className="text-sm text-white/40">多源去重，聚合数据拉取中...</div>
-      </div>
-    );
+    return <PlayDetailSkeleton />;
   }
 
   if (!video || video.sources.length === 0) {
@@ -121,7 +117,7 @@ function PlayContent() {
   const currentEpisode = currentSource?.links[activeEpIdx] || currentSource?.links[0];
 
   return (
-    <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
       
       {/* 左侧：播放器与影片详情介绍 */}
       <div className="lg:col-span-2 flex flex-col gap-4">
@@ -143,7 +139,7 @@ function PlayContent() {
           </div>
         )}
 
-        {/* 精致毛玻璃防骗安全警示条 (严格平移 play.css 动画) */}
+        {/* 精致防骗安全警示条 */}
         {showWarning && (
           <div className="w-full glass-card rounded-2xl p-4 bg-red-500/10 border border-red-500/20 backdrop-blur-md flex items-start justify-between gap-3 animate-in slide-in-from-bottom duration-300">
             <div className="flex items-start gap-3">
@@ -179,16 +175,16 @@ function PlayContent() {
               </div>
             </div>
 
-            {/* 心形追剧收藏键 */}
+            {/* 心形追剧收藏键 (带跳动弹性动效) */}
             <button
               onClick={handleToggleFavorite}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold transition-all cursor-pointer select-none ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold transition-all hover:scale-105 active:scale-95 duration-200 cursor-pointer select-none ${
                 isFavorited
                   ? "bg-pink-500/15 border-pink-500/30 text-pink-400 hover:bg-pink-500/25"
                   : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:border-indigo-500/30"
               }`}
             >
-              <span className={`transition-transform duration-300 ${isFavorited ? "scale-110 animate-bounce text-pink-500" : ""}`}>
+              <span className={`transition-transform duration-300 ${isFavorited ? "scale-110 animate-[bounce_1.5s_infinite] text-pink-500" : "group-hover:scale-110"}`}>
                 ♥
               </span>
               <span>{isFavorited ? "已追剧" : "追剧"}</span>
@@ -210,7 +206,7 @@ function PlayContent() {
       {/* 右侧：集数列表与播放源切换 */}
       <div className="flex flex-col gap-4">
         
-        {/* 1. 播放源切换 TAB (霓虹毛玻璃) */}
+        {/* 1. 播放源切换 TAB */}
         <div className="glass-card rounded-2xl p-4 border border-white/5">
           <div className="text-xs font-bold text-white/40 mb-3 tracking-wider">选择解析播放源</div>
           <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
@@ -268,12 +264,7 @@ function PlayContent() {
 
 export default function PlayPage() {
   return (
-    <Suspense fallback={
-      <div className="w-full py-20 flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <div className="text-sm text-white/40">流媒体模块水合中...</div>
-      </div>
-    }>
+    <Suspense fallback={<PlayDetailSkeleton />}>
       <PlayContent />
     </Suspense>
   );
