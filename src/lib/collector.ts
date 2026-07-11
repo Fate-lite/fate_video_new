@@ -230,11 +230,45 @@ export async function getCategoryVideos(type: string, limit = 18): Promise<Video
   const activeSources = await getActiveSources(6);
   const typeId = getTypeId(type);
   
-  // 并发拉取各大源站对应分类的最新电影详情
-  const list = await fetchAndMergeFromSources(activeSources, {
-    ac: "detail",
-    t: typeId,
-  });
+  // 并发拉取前 2 页数据，翻倍视频丰富度，确保分类与地区筛选有足够多的数据供呈现
+  const pagePromises = [1, 2].map((pg) =>
+    fetchAndMergeFromSources(activeSources, {
+      ac: "detail",
+      t: typeId,
+      pg: pg.toString(),
+    })
+  );
+
+  const pagesResults = await Promise.all(pagePromises);
+  
+  // 合并多页数据并在内存中做终极去重融合
+  const mergedMap = new Map<string, Video>();
+  for (const pageList of pagesResults) {
+    for (const v of pageList) {
+      if (mergedMap.has(v.id)) {
+        const existing = mergedMap.get(v.id)!;
+        existing.sources.push(...v.sources);
+        
+        // 合并后对 sources 链接进行去重，防止相同播放源重复出现
+        const seenUrls = new Set();
+        existing.sources = existing.sources.filter((s) => {
+          if (seenUrls.has(s.sourceUrl)) return false;
+          seenUrls.add(s.sourceUrl);
+          return true;
+        });
+
+        if (!existing.pic && v.pic) existing.pic = v.pic;
+        if (!existing.des && v.des) existing.des = v.des;
+        if (v.note && v.note.length > existing.note.length) {
+          existing.note = v.note;
+        }
+      } else {
+        mergedMap.set(v.id, v);
+      }
+    }
+  }
+
+  const list = Array.from(mergedMap.values());
 
   if (list.length > 0) {
     // 写入缓存 (缓存时间 6 小时)
