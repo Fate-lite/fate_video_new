@@ -37,9 +37,10 @@ export default function AdminPage() {
   const [loadingStats, setLoadingStats] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // 实时采集日志状态
+  // 实时采集日志状态与 Terminal 滚动容器引用
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const terminalEndRef = useRef<HTMLDivElement>(null);
+  const terminalBoxRef = useRef<HTMLDivElement>(null);
+  const isUserScrollingRef = useRef(false);
 
   // 拖拽排序与编辑新增源状态
   const [isSortingMode, setIsSortingMode] = useState(false);
@@ -64,10 +65,15 @@ export default function AdminPage() {
     return () => clearInterval(intervalId);
   }, [isAuthenticated]);
 
-  // 日志改变时，自动将控制台滚动到底部
+  // 日志改变时，自动且平稳地将控制台滚动到底部 (且防范页面大视口强行位移)
   useEffect(() => {
-    if (terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: "smooth" });
+    const box = terminalBoxRef.current;
+    if (box) {
+      // 仅当用户没有手动往上翻阅（距离底部 50px 内）时，才自动滚到底部，体验极其自然友好
+      const isAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 50;
+      if (isAtBottom || !isUserScrollingRef.current) {
+        box.scrollTop = box.scrollHeight;
+      }
     }
   }, [logs]);
 
@@ -140,7 +146,7 @@ export default function AdminPage() {
     } catch {}
   };
 
-  // 4. 清理缓存/历史
+  // 4. 清理缓存或历史
   const handleClearCache = async (type: "cache" | "search" | "all") => {
     const confirmMsg = 
       type === "cache" 
@@ -171,7 +177,26 @@ export default function AdminPage() {
     setActionLoading(null);
   };
 
-  // 5. 并发测速
+  // 5. 手动触发后台自动采集与预热更新缓存
+  const handleTriggerCollect = async () => {
+    setActionLoading("collect");
+    try {
+      const res = await fetch("/api/admin/collect", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        alert("已成功在后台触发并发更新采集！您可以在右侧终端监视实时进度。");
+        // 瞬时拉取日志以防空白
+        fetchLogs();
+      } else {
+        alert(data.msg || "触发采集失败");
+      }
+    } catch {
+      alert("接口网络超时");
+    }
+    setActionLoading(null);
+  };
+
+  // 6. 运行一键测速诊断
   const handleRunDiagnostic = async () => {
     setActionLoading("ping");
     try {
@@ -189,7 +214,7 @@ export default function AdminPage() {
     setActionLoading(null);
   };
 
-  // 6. 添加新采集源到当前暂存列表
+  // 7. 添加新采集源到当前暂存列表
   const handleAddSource = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSourceUrl.trim()) return;
@@ -216,13 +241,13 @@ export default function AdminPage() {
     setNewSourceUrl("");
   };
 
-  // 7. 从暂存列表移除采集源
+  // 8. 从暂存列表移除采集源
   const handleRemoveSource = (urlToRemove: string) => {
     if (!confirm("确定要在当前列表中移除该资源站配置吗？")) return;
     setSourceList(sourceList.filter((s) => s.url !== urlToRemove));
   };
 
-  // 8. 拖拽排序逻辑事件处理器
+  // 9. 拖拽排序逻辑事件处理器
   const handleDragStart = (index: number) => {
     setDraggedIndex(index);
   };
@@ -242,7 +267,7 @@ export default function AdminPage() {
     setDraggedIndex(null);
   };
 
-  // 9. 保存排序及更改后的采集源配置
+  // 10. 保存排序及更改后的采集源配置
   const handleSaveSortedSources = async () => {
     const urls = sourceList.map((s) => s.url);
     if (urls.length === 0) {
@@ -269,6 +294,15 @@ export default function AdminPage() {
       alert("保存失败，接口错误");
     }
     setActionLoading(null);
+  };
+
+  // 监听终端容器内部滚动状态，防范强制刷回底部
+  const handleTerminalScroll = () => {
+    const box = terminalBoxRef.current;
+    if (box) {
+      const isAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 30;
+      isUserScrollingRef.current = !isAtBottom;
+    }
   };
 
   // --- 渲染：未登录管理中心 ---
@@ -349,8 +383,9 @@ export default function AdminPage() {
             
             {/* 顶层三卡片运维仪表盘 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* 缓存容量 */}
-              <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
+              
+              {/* 缓存容量卡片 (新增手动预热采集功能) */}
+              <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col justify-between min-h-[160px] relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-3 text-white/5 group-hover:text-indigo-500/10 transition-colors text-3xl font-black select-none">
                   DB
                 </div>
@@ -358,17 +393,30 @@ export default function AdminPage() {
                   <div className="text-[10px] font-bold text-white/35 uppercase tracking-wide">缓存影片记录</div>
                   <div className="text-3xl font-black text-indigo-400 mt-2">{cacheCount} <span className="text-xs text-white/40 font-normal">部</span></div>
                 </div>
-                <button
-                  disabled={actionLoading !== null}
-                  onClick={() => handleClearCache("cache")}
-                  className="w-full text-center mt-4 py-1.5 rounded-lg border border-red-500/10 bg-red-500/5 hover:bg-red-500/10 text-red-400 text-[10px] font-bold transition-all cursor-pointer"
-                >
-                  一键清空影视缓存
-                </button>
+                
+                <div className="flex flex-col gap-2 mt-4">
+                  <button
+                    disabled={actionLoading !== null}
+                    onClick={handleTriggerCollect}
+                    className="w-full text-center py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 shadow-md shadow-indigo-600/10"
+                  >
+                    {actionLoading === "collect" ? (
+                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : null}
+                    <span>⚡ 一键后台手动更新采集</span>
+                  </button>
+                  <button
+                    disabled={actionLoading !== null}
+                    onClick={() => handleClearCache("cache")}
+                    className="w-full text-center py-1 rounded-lg border border-red-500/15 bg-red-500/5 hover:bg-red-500/10 text-red-400 text-[10px] font-semibold transition-all cursor-pointer"
+                  >
+                    清除影视本地缓存
+                  </button>
+                </div>
               </div>
 
               {/* 物理库容量 */}
-              <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
+              <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col justify-between min-h-[160px] relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-3 text-white/5 group-hover:text-pink-500/10 transition-colors text-3xl font-black select-none">
                   SZ
                 </div>
@@ -386,7 +434,7 @@ export default function AdminPage() {
               </div>
 
               {/* 采集源站 */}
-              <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
+              <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col justify-between min-h-[160px] relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-3 text-white/5 group-hover:text-green-500/10 transition-colors text-3xl font-black select-none">
                   API
                 </div>
@@ -541,10 +589,10 @@ export default function AdminPage() {
 
           </div>
 
-          {/* 右侧：采集运维日志监控控制台 (取代了原先的在线编辑) */}
+          {/* 右侧：采集运维日志监控控制台 */}
           <div className="flex flex-col gap-6">
             
-            {/* 实时采集日志 Shell 控制台 */}
+            {/* 实时采集日志 Shell 控制台 (优化本地滚动机制，解决大页面拉扯抖动) */}
             <div className="glass-card rounded-3xl p-5 border border-white/5 flex flex-col min-h-[480px] bg-black/45 shadow-2xl relative overflow-hidden group">
               
               {/* 终端顶部标头 */}
@@ -561,8 +609,12 @@ export default function AdminPage() {
                 </span>
               </div>
 
-              {/* 终端控制台核心内容区 */}
-              <div className="flex-1 overflow-y-auto max-h-[380px] pr-1 font-mono text-[10px] leading-relaxed select-text flex flex-col gap-2 p-1">
+              {/* 终端控制台核心内容区 (监听滚动条变化，防抖优化) */}
+              <div
+                ref={terminalBoxRef}
+                onScroll={handleTerminalScroll}
+                className="flex-1 overflow-y-auto max-h-[380px] pr-1 font-mono text-[10px] leading-relaxed select-text flex flex-col gap-2 p-1 hide-scrollbar"
+              >
                 {logs.length === 0 ? (
                   <div className="text-white/20 italic p-4 text-center">暂无采集运行日志...</div>
                 ) : (
@@ -578,8 +630,6 @@ export default function AdminPage() {
                     </div>
                   ))
                 )}
-                {/* 滚动定位锚点 */}
-                <div ref={terminalEndRef} />
               </div>
 
               {/* 终端光标底栏 */}
