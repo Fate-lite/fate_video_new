@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { cacheDb } from "./db";
-import { videoSources, VideoSource } from "./sources";
+import { getSources, VideoSource } from "./sources";
 
 export interface PlayLink {
   name: string;
@@ -184,14 +184,16 @@ export async function getActiveSources(limit = 6): Promise<VideoSource[]> {
     take: limit,
   });
 
+  const sources = getSources();
+
   if (dbStatuses.length > 0) {
     const activeUrls = new Set(dbStatuses.map((s) => s.api_url));
-    const list = videoSources.filter((s) => activeUrls.has(s.url));
+    const list = sources.filter((s) => activeUrls.has(s.url));
     if (list.length > 0) return list;
   }
 
   // 兜底返回前 limit 个默认源
-  return videoSources.slice(0, limit);
+  return sources.slice(0, limit);
 }
 
 // 获取影视分类映射ID

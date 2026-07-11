@@ -1,3 +1,6 @@
+import fs from "fs";
+import path from "path";
+
 export interface VideoSource {
   id: number;
   url: string;
@@ -32,7 +35,6 @@ export const rawSources: string[] = [
   "https://api.yzzy-api.com/inc/apijson.php/provide/vod/",
   "https://api.1080zyku.com/inc/apijson.php/provide/vod/",
   "https://www.mdzyapi.com/api.php/provide/vod/",
-  "https://caiji.dyttzyapi.com/api.php/provide/vod/",
   "http://cj.rycjapi.com/api.php/provide/vod/",
   "https://www.ryzyw.com/api.php/provide/vod/",
   "http://cj.ffzyapi.com/api.php/provide/vod/",
@@ -81,8 +83,43 @@ export function getSourceName(url: string): string {
   }
 }
 
-export const videoSources: VideoSource[] = rawSources.map((url, idx) => ({
-  id: idx,
-  url,
-  name: getSourceName(url),
-}));
+// 动态读取 data/sources.json，支持后台热改写而无需重新打包 Next.js
+export function getSources(): VideoSource[] {
+  const sourcesFilePath = path.resolve(process.cwd(), "data/sources.json");
+  let list = rawSources;
+  try {
+    if (fs.existsSync(sourcesFilePath)) {
+      const fileData = fs.readFileSync(sourcesFilePath, "utf-8");
+      const parsed = JSON.parse(fileData);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        list = parsed;
+      }
+    }
+  } catch (err) {
+    console.error("加载 sources.json 失败:", err);
+  }
+  return list.map((url, idx) => ({
+    id: idx,
+    url,
+    name: getSourceName(url),
+  }));
+}
+
+// 保存采集源配置
+export function saveSources(newSources: string[]): boolean {
+  const dataDir = path.resolve(process.cwd(), "data");
+  const sourcesFilePath = path.resolve(dataDir, "sources.json");
+  try {
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    // 过滤去重
+    const filtered = Array.from(new Set(newSources.map(s => s.trim()).filter(s => s.startsWith("http"))));
+    if (filtered.length === 0) return false;
+    fs.writeFileSync(sourcesFilePath, JSON.stringify(filtered, null, 2), "utf-8");
+    return true;
+  } catch (err) {
+    console.error("保存 sources.json 失败:", err);
+    return false;
+  }
+}
