@@ -392,9 +392,9 @@ const typeIdCache: Record<string, string[]> = {};
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   dianying: ["电影", "动作", "喜剧", "爱情", "科幻", "恐怖", "剧情", "战争", "惊悚", "悬疑", "犯罪", "纪录"],
-  dianshi: ["国产剧", "国产", "国产剧集", "大陆剧", "电视剧", "香港剧", "韩国剧", "欧美剧", "台湾剧", "日本剧", "海外剧", "泰剧", "剧"],
+  dianshi: ["国产剧", "国产", "国产剧集", "大陆剧", "电视剧", "香港剧", "韩国剧", "欧美剧", "台湾剧", "日本剧", "海外剧", "泰剧", "剧", "短剧", "AI短剧", "爽剧"],
   zongyi: ["综艺", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺", "综艺节目", "晚会"],
-  dongman: ["动漫", "国产动漫", "日韩动漫", "欧美动漫", "动画", "少儿动漫", "少儿动画"],
+  dongman: ["动漫", "国产动漫", "日韩动漫", "欧美动漫", "动画", "少儿动漫", "少儿动画", "AI", "AI动漫", "AI动画"],
 };
 
 export async function resolveSourceTypeIds(apiUrl: string, category: string): Promise<string[]> {
