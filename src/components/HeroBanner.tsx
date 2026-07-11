@@ -19,7 +19,7 @@ export default function HeroBanner({ bannerList }: HeroBannerProps) {
     stopTimer();
     timerRef.current = setInterval(() => {
       handleNext();
-    }, 6000); // 6秒自动轮播
+    }, 5000); // 调整为更自然的 5 秒自动轮播
   };
 
   const stopTimer = () => {
@@ -39,21 +39,21 @@ export default function HeroBanner({ bannerList }: HeroBannerProps) {
     if (isTransitioning) return;
     setIsTransitioning(true);
     setActiveIndex((prev) => (prev + 1) % total);
-    setTimeout(() => setIsTransitioning(false), 500);
+    setTimeout(() => setIsTransitioning(false), 300); // 缩短状态切换锁定时间
   };
 
   const handlePrev = () => {
     if (isTransitioning) return;
     setIsTransitioning(true);
     setActiveIndex((prev) => (prev - 1 + total) % total);
-    setTimeout(() => setIsTransitioning(false), 500);
+    setTimeout(() => setIsTransitioning(false), 300);
   };
 
   const handleDotClick = (index: number) => {
     if (index === activeIndex || isTransitioning) return;
     setIsTransitioning(true);
     setActiveIndex(index);
-    setTimeout(() => setIsTransitioning(false), 500);
+    setTimeout(() => setIsTransitioning(false), 300);
   };
 
   if (!bannerList || total === 0) return null;
@@ -66,32 +66,32 @@ export default function HeroBanner({ bannerList }: HeroBannerProps) {
       onMouseEnter={stopTimer}
       onMouseLeave={startTimer}
     >
-      {/* 幻灯片背景图集合 (带柔和淡入淡出动画) */}
+      {/* 幻灯片背景图集合 (敏捷的淡入淡出动画) */}
       <div className="absolute inset-0 -z-10 bg-black">
         {bannerList.map((video, idx) => (
           <div
             key={video.id}
-            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-              idx === activeIndex ? "opacity-40 scale-100" : "opacity-0 scale-105"
+            className={`absolute inset-0 transition-opacity duration-500 ease-in-out ${
+              idx === activeIndex ? "opacity-45" : "opacity-0"
             }`}
-            style={{ transitionProperty: "opacity, transform" }}
+            style={{ transitionProperty: "opacity" }}
           >
             <img
               src={video.pic}
               alt={video.title}
-              className="w-full h-full object-cover filter blur-[2px] brightness-75 scale-102"
+              className="w-full h-full object-cover filter blur-[1px] brightness-75 scale-101"
             />
           </div>
         ))}
         {/* 精致暗黑渐变层叠 */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#060713] via-[#060713]/30 to-black/40"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-[#060713] via-[#060713]/25 to-black/35"></div>
       </div>
 
-      {/* 幻灯片内容区 (带平移动画) */}
+      {/* 幻灯片内容区 (极其轻柔的淡入淡出过渡) */}
       <div className="p-6 md:p-12 w-full md:max-w-2xl select-none">
         <div
-          className={`transform transition-all duration-500 ease-out ${
-            isTransitioning ? "translate-y-4 opacity-0" : "translate-y-0 opacity-100"
+          className={`transform transition-all duration-300 ease-out ${
+            isTransitioning ? "translate-y-1 opacity-0" : "translate-y-0 opacity-100"
           }`}
         >
           <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-widest">
@@ -107,7 +107,7 @@ export default function HeroBanner({ bannerList }: HeroBannerProps) {
           <div className="flex items-center gap-4 mt-6">
             <Link
               href={`/play?title=${encodeURIComponent(activeVideo.title)}&type=${activeVideo.type}`}
-              className="px-6 py-2 md:px-8 md:py-2.5 rounded-full text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 tracking-wider transition-all hover:scale-105 active:scale-95 duration-200"
+              className="px-6 py-2 md:px-8 md:py-2.5 rounded-full text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 tracking-wider transition-all hover:scale-103 active:scale-95 duration-200"
             >
               立即播放
             </Link>
@@ -115,7 +115,7 @@ export default function HeroBanner({ bannerList }: HeroBannerProps) {
         </div>
       </div>
 
-      {/* 左右导航按钮 (PC端悬停显现) */}
+      {/* 左右导航按钮 */}
       {total > 1 && (
         <>
           <button
