@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 
 export default function Header() {
   const { user, logout, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [searchWd, setSearchWd] = useState("");
   const [showSearch, setShowSearch] = useState(false); // 手机端展开状态
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -61,19 +62,54 @@ export default function Header() {
 
         {/* 2. 中间：横向滑动分类菜单 (手机端极致展示，支持横向滑动) */}
         <nav className="flex-1 overflow-x-auto hide-scrollbar flex items-center justify-start md:justify-center gap-6 text-sm font-semibold scroll-smooth select-none px-2">
-          <Link href="/" className="text-white/80 hover:text-white transition-colors py-1 relative shrink-0 active-nav">
+          <Link
+            href="/"
+            className={`py-1 shrink-0 transition-colors relative ${
+              pathname === "/"
+                ? "text-indigo-400 font-extrabold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-4 after:h-0.5 after:bg-indigo-400 after:rounded-full"
+                : "text-white/60 hover:text-white"
+            }`}
+          >
             精选
           </Link>
-          <Link href="/list/dianying" className="text-white/60 hover:text-white transition-colors py-1 shrink-0">
+          <Link
+            href="/list/dianying"
+            className={`py-1 shrink-0 transition-colors relative ${
+              pathname === "/list/dianying"
+                ? "text-indigo-400 font-extrabold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-4 after:h-0.5 after:bg-indigo-400 after:rounded-full"
+                : "text-white/60 hover:text-white"
+            }`}
+          >
             电影
           </Link>
-          <Link href="/list/dianshi" className="text-white/60 hover:text-white transition-colors py-1 shrink-0">
+          <Link
+            href="/list/dianshi"
+            className={`py-1 shrink-0 transition-colors relative ${
+              pathname === "/list/dianshi"
+                ? "text-indigo-400 font-extrabold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-4 after:h-0.5 after:bg-indigo-400 after:rounded-full"
+                : "text-white/60 hover:text-white"
+            }`}
+          >
             电视剧
           </Link>
-          <Link href="/list/zongyi" className="text-white/60 hover:text-white transition-colors py-1 shrink-0">
+          <Link
+            href="/list/zongyi"
+            className={`py-1 shrink-0 transition-colors relative ${
+              pathname === "/list/zongyi"
+                ? "text-indigo-400 font-extrabold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-4 after:h-0.5 after:bg-indigo-400 after:rounded-full"
+                : "text-white/60 hover:text-white"
+            }`}
+          >
             综艺
           </Link>
-          <Link href="/list/dongman" className="text-white/60 hover:text-white transition-colors py-1 shrink-0">
+          <Link
+            href="/list/dongman"
+            className={`py-1 shrink-0 transition-colors relative ${
+              pathname === "/list/dongman"
+                ? "text-indigo-400 font-extrabold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-4 after:h-0.5 after:bg-indigo-400 after:rounded-full"
+                : "text-white/60 hover:text-white"
+            }`}
+          >
             动漫
           </Link>
         </nav>
