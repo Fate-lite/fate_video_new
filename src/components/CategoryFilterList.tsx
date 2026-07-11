@@ -11,6 +11,7 @@ interface CategoryFilterListProps {
 
 const YEARS = ["全部", "2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "更早"];
 const AREAS = ["全部", "中国大陆", "中国香港", "美国", "日本", "韩国", "欧洲", "其他"];
+const VERSIONS = ["全部", "蓝光/超清", "国语版", "粤语/原声", "连载中", "已完结"];
 
 // 各分类专属的影视类型标签列表
 const GENRES_MAP: Record<string, string[]> = {
@@ -26,6 +27,8 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
   const [selectedYear, setSelectedYear] = useState("全部");
   const [selectedArea, setSelectedArea] = useState("全部");
   const [selectedGenre, setSelectedGenre] = useState("全部");
+  const [selectedVersion, setSelectedVersion] = useState("全部");
+  const [selectedSort, setSelectedSort] = useState("default"); // default | score | hot
   
   const [isLazyLoading, setIsLazyLoading] = useState(false);
   const [hasLazyFetched, setHasLazyFetched] = useState(false);
@@ -89,9 +92,51 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
         }
       }
 
+      // 4. 版本/清晰度/状态过滤
+      if (selectedVersion !== "全部") {
+        const searchText = `${v.des} ${v.note} ${v.lang}`.toLowerCase();
+        if (selectedVersion === "蓝光/超清") {
+          if (!searchText.includes("蓝光") && !searchText.includes("bd") && !searchText.includes("1080p") && !searchText.includes("hd") && !searchText.includes("超清")) return false;
+        } else if (selectedVersion === "国语版") {
+          if (!searchText.includes("国语") && !searchText.includes("普通话")) return false;
+        } else if (selectedVersion === "粤语/原声") {
+          if (!searchText.includes("粤语") && !searchText.includes("原声") && !searchText.includes("英语") && !searchText.includes("韩语") && !searchText.includes("日语")) return false;
+        } else if (selectedVersion === "连载中") {
+          if (!v.note.includes("更新至") && !v.note.includes("连载") && !v.note.includes("第") && v.type !== "dianshi" && v.type !== "zongyi" && v.type !== "dongman") return false;
+        } else if (selectedVersion === "已完结") {
+          if (v.note.includes("更新至") || v.note.includes("连载")) return false;
+        }
+      }
+
       return true;
     });
-  }, [videoList, selectedYear, selectedArea, selectedGenre]);
+  }, [videoList, selectedYear, selectedArea, selectedGenre, selectedVersion]);
+
+  // 对过滤后的列表执行智能排序打分
+  const sortedList = useMemo(() => {
+    const listCopy = [...filteredList];
+    if (selectedSort === "score") {
+      // 智能提取评分 (如 "8.5分" -> 8.5)
+      const getScore = (v: Video) => {
+        const match = v.note.match(/(\d+\.\d+|\d+)分/);
+        if (match) return parseFloat(match[1]);
+        if (v.note.includes("HD") || v.note.includes("蓝光") || v.note.includes("超清")) return 8.0;
+        return 7.0;
+      };
+      return listCopy.sort((a, b) => getScore(b) - getScore(a));
+    } else if (selectedSort === "hot") {
+      // 智能提取热度评分 (被越多资源站收录采集，说明该片越火爆，且包含完结字眼额外加分)
+      const getHotScore = (v: Video) => {
+        let score = v.sources.length * 15; // 线路融合越多，热度越高
+        if (v.note.includes("完结") || v.note.includes("全")) score += 20;
+        if (v.des && v.des.length > 200) score += 10;
+        return score;
+      };
+      return listCopy.sort((a, b) => getHotScore(b) - getHotScore(a));
+    }
+    // 默认按最后更新时间排序 (即原列表的顺序)
+    return listCopy;
+  }, [filteredList, selectedSort]);
 
   // 监听过滤结果数量。如果特定筛选条件下的影视资源过少 (少于 12 部)，且我们还没有为该分类触发过深度懒拉取，则自动开启静默后台深度采集
   useEffect(() => {
@@ -111,16 +156,16 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
       setIsLazyLoading(false);
     };
 
-    const isFilterActive = selectedYear !== "全部" || selectedArea !== "全部" || selectedGenre !== "全部";
+    const isFilterActive = selectedYear !== "全部" || selectedArea !== "全部" || selectedGenre !== "全部" || selectedVersion !== "全部";
     if (isFilterActive && filteredList.length < 12 && !hasLazyFetched && !isLazyLoading) {
       triggerLazyCollect();
     }
-  }, [filteredList, selectedYear, selectedArea, selectedGenre, hasLazyFetched, isLazyLoading, categoryParam]);
+  }, [filteredList, selectedYear, selectedArea, selectedGenre, selectedVersion, hasLazyFetched, isLazyLoading, categoryParam]);
 
   // PC 端限制默认展示 24 个视频，布局更加对称协调（如 6 列 * 4 行）
   const displayList = useMemo(() => {
-    return filteredList.slice(0, 24);
-  }, [filteredList]);
+    return sortedList.slice(0, 24);
+  }, [sortedList]);
 
   return (
     <div className="w-full flex flex-col gap-6">
@@ -131,7 +176,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
           <span className="w-1.5 h-6 rounded-full bg-gradient-to-b from-indigo-500 to-pink-500 animate-pulse"></span>
           <span>{typeName}大厅</span>
         </h1>
-        <p className="text-xs text-white/40 mt-1">子分类对齐与多页去重，为您实时呈递最新上线的优质{typeName}资源</p>
+        <p className="text-xs text-white/40 mt-1">智能多源合并与深度过滤，为您实时呈递最新上线的优质{typeName}资源</p>
       </div>
 
       {/* 极简精致的毛玻璃分类筛选面板 */}
@@ -146,7 +191,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
                 key={g}
                 onClick={() => {
                   setSelectedGenre(g);
-                  setHasLazyFetched(false); // 改变条件，允许再次触发懒加载
+                  setHasLazyFetched(false);
                 }}
                 className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
                   selectedGenre === g
@@ -169,7 +214,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
                 key={y}
                 onClick={() => {
                   setSelectedYear(y);
-                  setHasLazyFetched(false); // 改变条件，允许再次触发懒加载
+                  setHasLazyFetched(false);
                 }}
                 className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
                   selectedYear === y
@@ -192,7 +237,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
                 key={a}
                 onClick={() => {
                   setSelectedArea(a);
-                  setHasLazyFetched(false); // 改变条件，允许再次触发懒加载
+                  setHasLazyFetched(false);
                 }}
                 className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
                   selectedArea === a
@@ -206,18 +251,42 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
           </div>
         </div>
 
+        {/* 按版本/清晰度/连载状态筛选 */}
+        <div className="flex items-start gap-4 border-t border-white/5 pt-4">
+          <span className="text-white/30 font-bold shrink-0 py-1">版本：</span>
+          <div className="flex flex-wrap gap-1.5">
+            {VERSIONS.map((v) => (
+              <button
+                key={v}
+                onClick={() => {
+                  setSelectedVersion(v);
+                  setHasLazyFetched(false);
+                }}
+                className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
+                  selectedVersion === v
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                    : "text-white/60 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+
       </div>
 
-      {/* 筛选过滤与懒加载状态提示 */}
-      <div className="flex items-center justify-between text-xs text-white/40 font-semibold px-1 mt-2">
-        <div className="flex items-center gap-2">
+      {/* 排序条与筛选结果状态提示 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-white/40 font-semibold px-1 mt-2 select-none">
+        
+        {/* 左侧：筛选数量与懒加载状态 */}
+        <div className="flex flex-wrap items-center gap-2">
           <span>筛选结果:</span>
           <span className="text-indigo-400 font-bold">{filteredList.length}</span>
           <span>部符合条件</span>
           
-          {/* 正在进行深度懒采集抓取时的精美提示 */}
           {isLazyLoading && (
-            <span className="text-indigo-400 font-bold flex items-center gap-1.5 ml-4 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 rounded-full text-[10px] animate-pulse">
+            <span className="text-indigo-400 font-bold flex items-center gap-1.5 ml-2 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 rounded-full text-[10px] animate-pulse">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping"></span>
               <span>🔍 正在为您深度检索各大源站历史资源库，请稍候...</span>
             </span>
@@ -227,20 +296,55 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
             <span className="text-[10px] text-white/20"> (PC端默认推荐前 24 部)</span>
           )}
         </div>
-        
-        {(selectedYear !== "全部" || selectedArea !== "全部" || selectedGenre !== "全部") && (
-          <button
-            onClick={() => {
-              setSelectedYear("全部");
-              setSelectedArea("全部");
-              setSelectedGenre("全部");
-              setHasLazyFetched(false);
-            }}
-            className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors cursor-pointer"
-          >
-            重置筛选 ✕
-          </button>
-        )}
+
+        {/* 右侧：高水准智能排序控制与重置 */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1">
+            <span className="text-white/25">排序:</span>
+            <div className="flex bg-white/5 border border-white/5 rounded-lg p-0.5">
+              <button
+                onClick={() => setSelectedSort("default")}
+                className={`px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer text-[10px] ${
+                  selectedSort === "default" ? "bg-indigo-600 text-white" : "text-white/40 hover:text-white/80"
+                }`}
+              >
+                🕒 最近更新
+              </button>
+              <button
+                onClick={() => setSelectedSort("hot")}
+                className={`px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer text-[10px] ${
+                  selectedSort === "hot" ? "bg-indigo-600 text-white" : "text-white/40 hover:text-white/80"
+                }`}
+              >
+                🔥 热门排行
+              </button>
+              <button
+                onClick={() => setSelectedSort("score")}
+                className={`px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer text-[10px] ${
+                  selectedSort === "score" ? "bg-indigo-600 text-white" : "text-white/40 hover:text-white/80"
+                }`}
+              >
+                ⭐ 评分最高
+              </button>
+            </div>
+          </div>
+          
+          {(selectedYear !== "全部" || selectedArea !== "全部" || selectedGenre !== "全部" || selectedVersion !== "全部" || selectedSort !== "default") && (
+            <button
+              onClick={() => {
+                setSelectedYear("全部");
+                setSelectedArea("全部");
+                setSelectedGenre("全部");
+                setSelectedVersion("全部");
+                setSelectedSort("default");
+                setHasLazyFetched(false);
+              }}
+              className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors cursor-pointer border-l border-white/10 pl-4"
+            >
+              重置筛选 ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 影视卡片网格 */}
@@ -249,7 +353,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
           {isLazyLoading ? (
             <div className="flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-              <div className="animate-pulse">正在穿透抓取底层第 3、4 页的隐藏资源，请稍候...</div>
+              <div className="animate-pulse">正在穿透抓取底层的隐藏资源，请稍候...</div>
             </div>
           ) : (
             "没有找到该筛选条件下的影视资源，请尝试重置筛选条件。"
