@@ -143,10 +143,21 @@ export function mergeVideos(rawList: any[], source: VideoSource): Video[] {
 export async function fetchAndMergeFromSources(
   sources: VideoSource[],
   params: Record<string, string>,
-  timeout = 3000
+  timeout = 3000,
+  category?: string
 ): Promise<Video[]> {
   const promises = sources.map(async (source) => {
-    const data = await requestSource(source.url, params, timeout);
+    const localParams = { ...params };
+    
+    // 如果指定了分类，动态对齐该源站正确的分类 ID，覆盖默认 t
+    if (category) {
+      try {
+        const matchedTid = await resolveSourceTypeId(source.url, category);
+        localParams["t"] = matchedTid;
+      } catch {}
+    }
+
+    const data = await requestSource(source.url, localParams, timeout);
     if (data && data.list) {
       return mergeVideos(data.list, source);
     }
@@ -229,15 +240,18 @@ export async function getCategoryVideos(type: string, limit = 18, forceRefresh =
 
   // 2. 缓存失效，穿透抓取
   const activeSources = await getActiveSources(6);
-  const typeId = getTypeId(type);
   
   // 并发拉取前 2 页数据，翻倍视频丰富度，确保分类与地区筛选有足够多的数据供呈现
   const pagePromises = [1, 2].map((pg) =>
-    fetchAndMergeFromSources(activeSources, {
-      ac: "detail",
-      t: typeId,
-      pg: pg.toString(),
-    })
+    fetchAndMergeFromSources(
+      activeSources,
+      {
+        ac: "detail",
+        pg: pg.toString(),
+      },
+      3000,
+      type // 🚀 传入大类标识以实现动态分类对齐
+    )
   );
 
   const pagesResults = await Promise.all(pagePromises);
@@ -356,4 +370,113 @@ export async function warmupAllCategories() {
     addAdminLog("ERROR", `自动后台定时采集异常中断: ${error.message || error}`);
   }
 }
+
+// 内存中缓存各资源站匹配好的分类ID，减少重复解析的 HTTP 开销
+const typeIdCache: Record<string, string> = {};
+
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  dianying: ["电影", "动作", "喜剧", "爱情", "科幻", "恐怖", "剧情", "战争", "惊悚", "悬疑", "犯罪", "纪录"],
+  dianshi: ["国产剧", "国产", "国产剧集", "大陆剧", "电视剧", "香港剧", "韩国剧", "欧美剧", "台湾剧", "日本剧", "海外剧", "泰剧"],
+  zongyi: ["综艺", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺"],
+  dongman: ["动漫", "国产动漫", "日韩动漫", "欧美动漫", "动画"],
+};
+
+export async function resolveSourceTypeId(apiUrl: string, category: string): Promise<string> {
+  const cacheKey = `${apiUrl}_${category}`;
+  if (typeIdCache[cacheKey]) {
+    return typeIdCache[cacheKey];
+  }
+
+  const getFallbackId = (cat: string) => {
+    switch (cat) {
+      case "dianying": return "1";
+      case "dianshi": return "2";
+      case "zongyi": return "3";
+      case "dongman": return "4";
+      default: return "1";
+    }
+  };
+
+  const fallback = getFallbackId(category);
+
+  try {
+    // 请求分类列表获取大类分类树
+    const listUrl = apiUrl + (apiUrl.includes("?") ? "&" : "?") + "ac=list";
+    
+    // Node.js 异步 fetch，配合 2.5 秒超时控制
+    const res = await fetch(listUrl, {
+      signal: AbortSignal.timeout(2500),
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      }
+    });
+
+    if (!res.ok) return fallback;
+    const data = await res.json();
+    if (!data || !Array.isArray(data.class) || data.class.length === 0) {
+      return fallback;
+    }
+
+    const classes = data.class as { type_id: number | string; type_name: string; type_pid?: number | string }[];
+    const keywords = CATEGORY_KEYWORDS[category] || [];
+
+    // 1. 尝试定位一级分类大类 ID (type_pid === 0)
+    let parentId: string | null = null;
+    for (const item of classes) {
+      const pid = item.type_pid !== undefined ? String(item.type_pid) : "-1";
+      if (pid !== "0") continue;
+      const tname = item.type_name || "";
+      for (const kw of keywords) {
+        if (tname.includes(kw)) {
+          parentId = String(item.type_id);
+          break;
+        }
+      }
+      if (parentId) break;
+    }
+
+    // 2. 匹配并对大类下所有匹配字项打分
+    let bestId = fallback;
+    let bestScore = -1;
+
+    for (const item of classes) {
+      const tid = String(item.type_id);
+      const tname = (item.type_name || "").trim();
+      const pid = item.type_pid !== undefined ? String(item.type_pid) : "0";
+      
+      if (!tid || !tname) continue;
+
+      if (parentId !== null) {
+        // 如果有大类映射，限制子分类必须属于该大类下
+        if (pid !== parentId) continue;
+      } else {
+        // 兜底大类硬性名字防混淆排除
+        if (category === "dianying" && (tname.includes("剧") || tname.includes("动漫") || tname.includes("综艺"))) continue;
+        if (category === "dianshi" && (tname.includes("片") || tname.includes("动漫") || tname.includes("综艺"))) continue;
+        if (category === "zongyi" && !tname.includes("综艺")) continue;
+        if (category === "dongman" && !tname.includes("动漫") && !tname.includes("动画")) continue;
+      }
+
+      let score = 0;
+      for (const kw of keywords) {
+        if (tname.includes(kw)) {
+          score += 10;
+        }
+      }
+
+      if (score > bestScore && score > 0) {
+        bestScore = score;
+        bestId = tid;
+      }
+    }
+
+    typeIdCache[cacheKey] = bestId;
+    addAdminLog("INFO", `源站 [${apiUrl.replace("https://", "").replace("http://", "").split("/")[0]}] 对齐分类 [${category}] 成功 -> 动态定位ID: [${bestId}]`);
+    return bestId;
+  } catch {
+    return fallback;
+  }
+}
+
 
