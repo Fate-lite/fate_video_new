@@ -239,22 +239,34 @@ function PlayContent() {
             <span className="text-[10px] text-white/30 font-semibold">共 {currentSource?.links.length || 0} 集</span>
           </div>
 
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-3 gap-2 overflow-y-auto max-h-[450px] pr-1">
-            {currentSource?.links.map((ep, idx) => (
-              <button
-                key={idx}
-                onClick={() => setActiveEpIdx(idx)}
-                className={`py-2 px-1 text-center rounded-lg text-xs font-bold transition-all truncate cursor-pointer ${
-                  activeEpIdx === idx
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                    : "bg-white/5 border border-white/5 text-white/70 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                {ep.name}
-              </button>
-            ))}
-          </div>
+          {/* 动态计算平均字符长度，如果包含长字数（例如综艺“第20260515期”）则自动降级为双列宽距排版 */}
+          {(() => {
+            const isLongEpName = currentSource?.links.some(ep => ep.name.length > 6);
+            return (
+              <div className={`overflow-y-auto max-h-[450px] pr-1 ${
+                isLongEpName 
+                  ? "grid grid-cols-2 gap-2" 
+                  : "grid grid-cols-3 md:grid-cols-4 lg:grid-cols-3 gap-2"
+              }`}>
+                {currentSource?.links.map((ep, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveEpIdx(idx)}
+                    title={ep.name}
+                    className={`py-2.5 px-2 text-center rounded-lg text-xs font-bold transition-all truncate cursor-pointer ${
+                      activeEpIdx === idx
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                        : "bg-white/5 border border-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {ep.name}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
         </div>
+
 
       </div>
 
