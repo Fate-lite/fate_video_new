@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveSources } from "@/lib/sources";
+import { addAdminLog } from "@/lib/logger";
 
 function checkAdminAuth(req: NextRequest): boolean {
   const token = req.cookies.get("fate_admin_token")?.value;
@@ -21,8 +22,10 @@ export async function POST(req: NextRequest) {
 
     const success = saveSources(sources);
     if (success) {
+      addAdminLog("SUCCESS", `采集源列表排序与增删已更新保存，当前激活源数量: ${sources.length} 个`);
       return NextResponse.json({ success: true, msg: "采集源配置已更新成功" });
     } else {
+      addAdminLog("ERROR", "写入 sources.json 失败，请检查物理磁盘或目录读写权限");
       return NextResponse.json({ success: false, msg: "写入采集源配置文件失败" }, { status: 500 });
     }
   } catch (error: any) {

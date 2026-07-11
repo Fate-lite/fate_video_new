@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 interface SourceStatus {
@@ -16,34 +16,60 @@ interface HotSearch {
   count: number;
 }
 
-interface AdminStats {
-  cacheCount: number;
-  dbSizeFormatted: string;
-  sourceCount: number;
-  sourceList: SourceStatus[];
-  hotSearches: HotSearch[];
+interface LogEntry {
+  id: string;
+  timestamp: string;
+  level: "INFO" | "SUCCESS" | "WARN" | "ERROR";
+  message: string;
 }
 
 export default function AdminPage() {
-  const router = useRouter();
-  
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
 
-  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [sourceList, setSourceList] = useState<SourceStatus[]>([]);
+  const [cacheCount, setCacheCount] = useState(0);
+  const [dbSizeFormatted, setDbSizeFormatted] = useState("0 Bytes");
+  const [hotSearches, setHotSearches] = useState<HotSearch[]>([]);
+  
   const [loadingStats, setLoadingStats] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // 编辑采集源状态
-  const [editingSources, setEditingSources] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
+  // 实时采集日志状态
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const terminalEndRef = useRef<HTMLDivElement>(null);
 
-  // 1. 挂载时尝试获取统计数据（测试 Cookie 是否有效）
+  // 拖拽排序与编辑新增源状态
+  const [isSortingMode, setIsSortingMode] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  
+  // 新增采集源表单
+  const [newSourceName, setNewSourceName] = useState("");
+  const [newSourceUrl, setNewSourceUrl] = useState("");
+
+  // 1. 初始化拉取统计和日志
   useEffect(() => {
     fetchStats();
-  }, []);
+    fetchLogs();
+
+    // 开启日志每 3 秒自动刷新定时器
+    const intervalId = setInterval(() => {
+      if (isAuthenticated) {
+        fetchLogs();
+      }
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated]);
+
+  // 日志改变时，自动将控制台滚动到底部
+  useEffect(() => {
+    if (terminalEndRef.current) {
+      terminalEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [logs]);
 
   const fetchStats = async () => {
     setLoadingStats(true);
@@ -52,11 +78,11 @@ export default function AdminPage() {
       if (res.status === 200) {
         const data = await res.json();
         if (data.success) {
-          setStats(data.stats);
+          setCacheCount(data.stats.cacheCount);
+          setDbSizeFormatted(data.stats.dbSizeFormatted);
+          setSourceList(data.stats.sourceList);
+          setHotSearches(data.stats.hotSearches);
           setIsAuthenticated(true);
-          // 将源列表解析为每行一个的文本形式
-          const urlsText = data.stats.sourceList.map((s: any) => s.url).join("\n");
-          setEditingSources(urlsText);
         }
       } else {
         setIsAuthenticated(false);
@@ -65,6 +91,19 @@ export default function AdminPage() {
       setIsAuthenticated(false);
     }
     setLoadingStats(false);
+  };
+
+  const fetchLogs = async () => {
+    try {
+      const res = await fetch("/api/admin/logs");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          // 后端返回的是 unshift 的最新在最前，我们用 reverse 转过来在最下，利于终端向下滚动
+          setLogs([...data.logs].reverse());
+        }
+      }
+    } catch {}
   };
 
   // 2. 登录认证
@@ -84,25 +123,24 @@ export default function AdminPage() {
         setIsAuthenticated(true);
         fetchStats();
       } else {
-        setAuthError(data.msg || "认证失败，请重试");
+        setAuthError(data.msg || "密码错误，拒绝访问");
       }
     } catch {
-      setAuthError("网络错误，认证请求失败");
+      setAuthError("网络故障，请求发送失败");
     }
     setAuthLoading(false);
   };
 
-  // 3. 退出后台
+  // 3. 登出
   const handleLogout = async () => {
     try {
       await fetch("/api/admin/logout", { method: "POST" });
       setIsAuthenticated(false);
-      setStats(null);
       setPassword("");
     } catch {}
   };
 
-  // 4. 清理缓存或历史
+  // 4. 清理缓存/历史
   const handleClearCache = async (type: "cache" | "search" | "all") => {
     const confirmMsg = 
       type === "cache" 
@@ -122,61 +160,10 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.msg || "清理成功！");
         fetchStats();
+        fetchLogs();
       } else {
         alert(data.msg || "清理失败");
-      }
-    } catch {
-      alert("网络连接异常");
-    }
-    setActionLoading(null);
-  };
-
-  // 5. 运行一键测速诊断
-  const handleRunDiagnostic = async () => {
-    setActionLoading("ping");
-    try {
-      const res = await fetch("/api/admin/diagnostic", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        alert(data.msg || "测速诊断完成！");
-        fetchStats();
-      } else {
-        alert(data.msg || "诊断失败");
-      }
-    } catch {
-      alert("测速接口网络超时");
-    }
-    setActionLoading(null);
-  };
-
-  // 6. 保存采集源
-  const handleSaveSources = async () => {
-    const lines = editingSources
-      .split("\n")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    
-    if (lines.length === 0) {
-      alert("必须保留至少一个有效的采集源站！");
-      return;
-    }
-
-    setActionLoading("save");
-    try {
-      const res = await fetch("/api/admin/save-sources", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sources: lines }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert("配置已更新，下次采集将自动使用新源站！");
-        setIsEditing(false);
-        fetchStats();
-      } else {
-        alert(data.msg || "保存失败");
       }
     } catch {
       alert("网络错误");
@@ -184,7 +171,107 @@ export default function AdminPage() {
     setActionLoading(null);
   };
 
-  // --- 渲染：未登录状态 ---
+  // 5. 并发测速
+  const handleRunDiagnostic = async () => {
+    setActionLoading("ping");
+    try {
+      const res = await fetch("/api/admin/diagnostic", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        fetchStats();
+        fetchLogs();
+      } else {
+        alert(data.msg || "测速失败");
+      }
+    } catch {
+      alert("接口网络超时");
+    }
+    setActionLoading(null);
+  };
+
+  // 6. 添加新采集源到当前暂存列表
+  const handleAddSource = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSourceUrl.trim()) return;
+
+    const url = newSourceUrl.trim();
+    const name = newSourceName.trim() || new URL(url).hostname.replace("www.", "");
+    
+    // 检查重复
+    if (sourceList.some((s) => s.url === url)) {
+      alert("该采集源 URL 已经在列表中，请勿重复添加");
+      return;
+    }
+
+    const newSrc: SourceStatus = {
+      id: Math.floor(Math.random() * 100000),
+      name,
+      url,
+      status: "Unknown",
+      latency: null,
+    };
+
+    setSourceList([...sourceList, newSrc]);
+    setNewSourceName("");
+    setNewSourceUrl("");
+  };
+
+  // 7. 从暂存列表移除采集源
+  const handleRemoveSource = (urlToRemove: string) => {
+    if (!confirm("确定要在当前列表中移除该资源站配置吗？")) return;
+    setSourceList(sourceList.filter((s) => s.url !== urlToRemove));
+  };
+
+  // 8. 拖拽排序逻辑事件处理器
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (index: number) => {
+    if (draggedIndex === null || draggedIndex === index) return;
+    
+    const updated = [...sourceList];
+    const [draggedItem] = updated.splice(draggedIndex, 1);
+    updated.splice(index, 0, draggedItem);
+    
+    setSourceList(updated);
+    setDraggedIndex(null);
+  };
+
+  // 9. 保存排序及更改后的采集源配置
+  const handleSaveSortedSources = async () => {
+    const urls = sourceList.map((s) => s.url);
+    if (urls.length === 0) {
+      alert("必须保留至少一个有效的采集源站！");
+      return;
+    }
+
+    setActionLoading("save-sorted");
+    try {
+      const res = await fetch("/api/admin/save-sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sources: urls }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsSortingMode(false);
+        fetchStats();
+        fetchLogs();
+      } else {
+        alert(data.msg || "保存配置失败");
+      }
+    } catch {
+      alert("保存失败，接口错误");
+    }
+    setActionLoading(null);
+  };
+
+  // --- 渲染：未登录管理中心 ---
   if (!isAuthenticated) {
     return (
       <div className="w-full max-w-md mx-auto my-16 md:my-28">
@@ -228,18 +315,18 @@ export default function AdminPage() {
     );
   }
 
-  // --- 渲染：已登录状态的主面板 ---
+  // --- 渲染：主管理面板 ---
   return (
     <div className="w-full animate-in fade-in duration-500">
       
-      {/* 头部导航区域 */}
+      {/* 头部信息栏 */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-5 mb-8 gap-4">
         <div>
           <h1 className="text-xl md:text-2xl font-black text-white flex items-center gap-2">
-            <span className="w-1.5 h-6 rounded-full bg-gradient-to-b from-indigo-500 to-pink-500 animate-pulse"></span>
+            <span className="w-1.5 h-6 rounded-full bg-gradient-to-b from-indigo-500 to-pink-500"></span>
             <span>采集运维监控中心</span>
           </h1>
-          <p className="text-xs text-white/40 mt-1">动态监测 SQLite 数据库容量，一键清空高强度缓冲，配置极速采集源</p>
+          <p className="text-xs text-white/40 mt-1">支持拖拽对采集源站进行实时排序，监测物理数据库与日志控制台</p>
         </div>
         <button
           onClick={handleLogout}
@@ -249,7 +336,7 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {loadingStats || !stats ? (
+      {loadingStats ? (
         <div className="w-full py-20 flex flex-col items-center justify-center gap-4">
           <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
           <div className="text-xs text-white/40 font-semibold animate-pulse">正在获取系统监控数据流，请稍后...</div>
@@ -257,20 +344,19 @@ export default function AdminPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* 左侧主要运维控制面板 */}
+          {/* 左侧：采集源列表与拖拽排序管理 (宽占位) */}
           <div className="lg:col-span-2 flex flex-col gap-6">
             
-            {/* 三栏状态统计网格 */}
+            {/* 顶层三卡片运维仪表盘 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
-              {/* 缓存统计卡片 */}
+              {/* 缓存容量 */}
               <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-3 text-white/5 group-hover:text-indigo-500/10 transition-colors text-3xl font-black select-none">
                   DB
                 </div>
                 <div>
                   <div className="text-[10px] font-bold text-white/35 uppercase tracking-wide">缓存影片记录</div>
-                  <div className="text-3xl font-black text-indigo-400 mt-2">{stats.cacheCount} <span className="text-xs text-white/40 font-normal">部</span></div>
+                  <div className="text-3xl font-black text-indigo-400 mt-2">{cacheCount} <span className="text-xs text-white/40 font-normal">部</span></div>
                 </div>
                 <button
                   disabled={actionLoading !== null}
@@ -281,14 +367,14 @@ export default function AdminPage() {
                 </button>
               </div>
 
-              {/* 物理库统计卡片 */}
+              {/* 物理库容量 */}
               <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-3 text-white/5 group-hover:text-pink-500/10 transition-colors text-3xl font-black select-none">
                   SZ
                 </div>
                 <div>
                   <div className="text-[10px] font-bold text-white/35 uppercase tracking-wide">SQLite 整体物理容量</div>
-                  <div className="text-3xl font-black text-pink-400 mt-2">{stats.dbSizeFormatted}</div>
+                  <div className="text-3xl font-black text-pink-400 mt-2">{dbSizeFormatted}</div>
                 </div>
                 <button
                   disabled={actionLoading !== null}
@@ -299,14 +385,14 @@ export default function AdminPage() {
                 </button>
               </div>
 
-              {/* 采集源统计卡片 */}
-              <div className="glass-card rounded-2xl p-5 border border-white/5 flex-1 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
+              {/* 采集源站 */}
+              <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-3 text-white/5 group-hover:text-green-500/10 transition-colors text-3xl font-black select-none">
                   API
                 </div>
                 <div>
                   <div className="text-[10px] font-bold text-white/35 uppercase tracking-wide">已配置采集源</div>
-                  <div className="text-3xl font-black text-green-400 mt-2">{stats.sourceCount} <span className="text-xs text-white/40 font-normal">个</span></div>
+                  <div className="text-3xl font-black text-green-400 mt-2">{sourceList.length} <span className="text-xs text-white/40 font-normal">个</span></div>
                 </div>
                 <button
                   disabled={actionLoading !== null}
@@ -319,32 +405,123 @@ export default function AdminPage() {
                   <span>一键运行并发测速诊断</span>
                 </button>
               </div>
-
             </div>
 
-            {/* 采集源在线状态列表监控 */}
-            <div className="glass-card rounded-2xl p-5 border border-white/5">
-              <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-4">
-                <span className="text-xs font-bold text-white/70 tracking-wider">采集源站状态监测快照</span>
-                <span className="text-[10px] text-white/30 font-semibold">健康状态显示为最近一次测速延迟</span>
-              </div>
+            {/* 采集源列表控制面板 */}
+            <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col gap-4">
               
-              <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto pr-1">
-                {stats.sourceList.map((src) => (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-3 gap-2">
+                <div>
+                  <span className="text-xs font-bold text-white/70 tracking-wider">
+                    {isSortingMode ? "🔃 采集源站拖拽排序与编辑" : "采集源站状态监测与列表"}
+                  </span>
+                  <p className="text-[9px] text-white/30 mt-0.5">
+                    {isSortingMode ? "按住源站卡片上下拖拽来调换抓取优先顺序" : "系统去重时将按照此列表中从上到下的顺序优先解析"}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {!isSortingMode ? (
+                    <button
+                      onClick={() => setIsSortingMode(true)}
+                      className="text-xs font-bold px-3 py-1 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-500/30 transition-all cursor-pointer"
+                    >
+                      排序与增删管理
+                    </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        disabled={actionLoading === "save-sorted"}
+                        onClick={handleSaveSortedSources}
+                        className="text-xs font-bold px-3 py-1 rounded-lg bg-green-500/20 text-green-400 border border-green-500/20 hover:bg-green-500/30 transition-all cursor-pointer flex items-center gap-1"
+                      >
+                        {actionLoading === "save-sorted" ? (
+                          <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
+                        ) : null}
+                        <span>保存更新</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsSortingMode(false);
+                          fetchStats(); // 回滚
+                        }}
+                        className="text-xs font-bold px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-white/40 hover:text-white transition-all cursor-pointer"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 排序编辑模式特有：新增源输入框表单 */}
+              {isSortingMode && (
+                <form onSubmit={handleAddSource} className="grid grid-cols-1 md:grid-cols-5 gap-2 p-3 bg-white/5 rounded-xl border border-white/5 animate-in fade-in duration-300">
+                  <input
+                    type="text"
+                    placeholder="源站名称 (如: 360资源)"
+                    value={newSourceName}
+                    onChange={(e) => setNewSourceName(e.target.value)}
+                    className="md:col-span-2 bg-black/30 border border-white/5 rounded-lg px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-indigo-500/30"
+                  />
+                  <input
+                    type="url"
+                    placeholder="XML/JSON API 地址"
+                    value={newSourceUrl}
+                    onChange={(e) => setNewSourceUrl(e.target.value)}
+                    required
+                    className="md:col-span-2 bg-black/30 border border-white/5 rounded-lg px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-indigo-500/30"
+                  />
+                  <button
+                    type="submit"
+                    className="py-2 px-3 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500 transition-colors cursor-pointer"
+                  >
+                    ➕ 插入到末尾
+                  </button>
+                </form>
+              )}
+
+              {/* 列表渲染 (带拖拽属性) */}
+              <div className="flex flex-col gap-2 max-h-[460px] overflow-y-auto pr-1">
+                {sourceList.map((src, index) => (
                   <div
                     key={src.id}
-                    className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 border border-white/5 text-xs hover:border-white/10 transition-all"
+                    draggable={isSortingMode}
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDrop={() => handleDrop(index)}
+                    className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
+                      isSortingMode
+                        ? "bg-white/5 border-dashed border-indigo-500/20 cursor-grab hover:bg-indigo-500/5 hover:border-indigo-500/40"
+                        : "bg-white/5 border-white/5 hover:border-white/10"
+                    }`}
                   >
-                    <div className="flex items-center gap-2.5 truncate w-2/3">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${
-                        src.status === "Online" ? "bg-green-500 shadow-lg shadow-green-500/30" : src.status === "Offline" ? "bg-red-500" : "bg-white/20 animate-pulse"
-                      }`}></span>
+                    <div className="flex items-center gap-3 truncate w-2/3 select-none">
+                      {isSortingMode ? (
+                        <span className="text-white/20 font-bold font-mono">☰</span>
+                      ) : (
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${
+                          src.status === "Online" ? "bg-green-500 shadow-lg shadow-green-500/30" : src.status === "Offline" ? "bg-red-500" : "bg-white/20 animate-pulse"
+                        }`}></span>
+                      )}
+                      
+                      <span className="text-[10px] text-white/30 font-bold font-mono w-6 shrink-0 text-center bg-white/5 rounded">
+                        #{index + 1}
+                      </span>
+                      
                       <span className="font-bold text-white/80 shrink-0">{src.name}</span>
                       <span className="text-[10px] text-white/35 truncate">{src.url}</span>
                     </div>
 
-                    <div className="text-right shrink-0">
-                      {src.status === "Online" && src.latency !== null ? (
+                    <div className="text-right shrink-0 flex items-center gap-3">
+                      {isSortingMode ? (
+                        <button
+                          onClick={() => handleRemoveSource(src.url)}
+                          className="text-[10px] font-bold px-2.5 py-1 rounded bg-red-500/10 hover:bg-red-500/25 border border-red-500/20 text-red-400 transition-colors cursor-pointer select-none"
+                        >
+                          ✕ 删除
+                        </button>
+                      ) : src.status === "Online" && src.latency !== null ? (
                         <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
                           src.latency < 500 ? "text-green-400 bg-green-500/10" : src.latency < 1500 ? "text-warning bg-warning/10" : "text-danger bg-danger/10"
                         }`}>
@@ -359,76 +536,73 @@ export default function AdminPage() {
                   </div>
                 ))}
               </div>
+
             </div>
 
           </div>
 
-          {/* 右侧边栏：在线编辑源站 & 热搜排行 */}
+          {/* 右侧：采集运维日志监控控制台 (取代了原先的在线编辑) */}
           <div className="flex flex-col gap-6">
             
-            {/* 在线编辑源站面板 */}
-            <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col min-h-[300px]">
-              <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-4">
-                <span className="text-xs font-bold text-white/70 tracking-wider">在线编辑采集源 (Hot Edit)</span>
-                {!isEditing ? (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
-                  >
-                    ✏️ 编辑
-                  </button>
-                ) : (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSaveSources}
-                      disabled={actionLoading === "save"}
-                      className="text-[10px] font-bold text-green-400 hover:text-green-300 transition-colors cursor-pointer"
-                    >
-                      💾 保存
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsEditing(false);
-                        const urlsText = stats.sourceList.map((s) => s.url).join("\n");
-                        setEditingSources(urlsText);
-                      }}
-                      className="text-[10px] font-bold text-white/40 hover:text-white transition-colors cursor-pointer"
-                    >
-                      取消
-                    </button>
-                  </div>
-                )}
+            {/* 实时采集日志 Shell 控制台 */}
+            <div className="glass-card rounded-3xl p-5 border border-white/5 flex flex-col min-h-[480px] bg-black/45 shadow-2xl relative overflow-hidden group">
+              
+              {/* 终端顶部标头 */}
+              <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-4 select-none">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-red-500/40"></span>
+                  <span className="w-3 h-3 rounded-full bg-yellow-500/40"></span>
+                  <span className="w-3 h-3 rounded-full bg-green-500/40"></span>
+                  <span className="text-[11px] font-bold text-white/50 font-mono ml-2">fate-system.log</span>
+                </div>
+                
+                <span className="text-[9px] font-bold text-indigo-400/80 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded uppercase tracking-wider animate-pulse">
+                  Live Streaming
+                </span>
               </div>
 
-              {!isEditing ? (
-                <div className="flex-1 overflow-y-auto max-h-[220px] bg-black/15 rounded-xl border border-white/5 p-3.5 text-[10px] text-white/50 leading-relaxed font-mono whitespace-pre-wrap select-text select-none">
-                  {stats.sourceList.map((s) => s.url).join("\n")}
+              {/* 终端控制台核心内容区 */}
+              <div className="flex-1 overflow-y-auto max-h-[380px] pr-1 font-mono text-[10px] leading-relaxed select-text flex flex-col gap-2 p-1">
+                {logs.length === 0 ? (
+                  <div className="text-white/20 italic p-4 text-center">暂无采集运行日志...</div>
+                ) : (
+                  logs.map((log) => (
+                    <div key={log.id} className="transition-all duration-200">
+                      <span className="text-white/30 select-none mr-2">[{log.timestamp}]</span>
+                      <span className={`font-bold mr-2 ${
+                        log.level === "SUCCESS" ? "text-green-400" : log.level === "WARN" ? "text-yellow-400" : log.level === "ERROR" ? "text-red-400" : "text-indigo-300"
+                      }`}>
+                        {log.level}
+                      </span>
+                      <span className="text-white/70">{log.message}</span>
+                    </div>
+                  ))
+                )}
+                {/* 滚动定位锚点 */}
+                <div ref={terminalEndRef} />
+              </div>
+
+              {/* 终端光标底栏 */}
+              <div className="border-t border-white/5 pt-3.5 mt-3 select-none flex items-center justify-between text-[9px] text-white/35 font-mono">
+                <div className="flex items-center gap-1">
+                  <span>root@fate-video:~#</span>
+                  <span className="w-1.5 h-3 bg-green-500 animate-[blink_1s_infinite]"></span>
                 </div>
-              ) : (
-                <textarea
-                  value={editingSources}
-                  onChange={(e) => setEditingSources(e.target.value)}
-                  placeholder="请输入资源站 XML/JSON API 接口地址，每行填写一个以 http 或 https 开始的地址"
-                  className="flex-1 w-full bg-black/35 border border-white/5 focus:border-indigo-500/30 rounded-xl p-3.5 text-[10px] text-indigo-300 font-mono focus:outline-none resize-none leading-relaxed min-h-[200px]"
-                />
-              )}
-              <div className="text-[9px] text-white/30 mt-3.5 leading-relaxed bg-white/5 rounded-lg p-2.5">
-                <strong className="text-indigo-300">温馨提示：</strong>
-                在线修改并保存后将实时写入 `data/sources.json` 文件中，缓存清空或下次拉取时立即生效，无需重启或重新编译 Next.js！
+                <span>Buffered: {logs.length} items</span>
               </div>
             </div>
 
-            {/* 用户热门检索排行榜 */}
-            <div className="glass-card rounded-2xl p-5 border border-white/5 flex-1">
+            {/* 用户热搜 */}
+            <div className="glass-card rounded-2xl p-5 border border-white/5 flex flex-col justify-between">
               <div className="border-b border-white/5 pb-3 mb-4">
                 <span className="text-xs font-bold text-white/70 tracking-wider">用户热搜词 Top 10</span>
               </div>
               
-              {stats.hotSearches.length === 0 ? (
-                <div className="text-center py-8 text-xs text-white/20">暂无热度搜索历史记录</div>
+              {hotSearches.length === 0 ? (
+                <div className="text-center py-6 text-xs text-white/20">暂无搜索热度数据</div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {stats.hotSearches.map((hot, idx) => (
+                  {hotSearches.map((hot, idx) => (
                     <div
                       key={idx}
                       className="flex items-center justify-between text-xs py-2 px-3 bg-white/5 rounded-lg"
@@ -445,15 +619,13 @@ export default function AdminPage() {
                     </div>
                   ))}
                   
-                  {stats.hotSearches.length > 0 && (
-                    <button
-                      disabled={actionLoading !== null}
-                      onClick={() => handleClearCache("search")}
-                      className="w-full text-center mt-3 py-1.5 rounded-lg border border-red-500/10 bg-red-500/5 hover:bg-red-500/10 text-red-400 text-[10px] font-bold transition-all cursor-pointer"
-                    >
-                      ✕ 重置清除搜索热榜
-                    </button>
-                  )}
+                  <button
+                    disabled={actionLoading !== null}
+                    onClick={() => handleClearCache("search")}
+                    className="w-full text-center mt-3 py-1.5 rounded-lg border border-red-500/10 bg-red-500/5 hover:bg-red-500/10 text-red-400 text-[10px] font-bold transition-all cursor-pointer"
+                  >
+                    ✕ 重置清除搜索热词
+                  </button>
                 </div>
               )}
             </div>
@@ -462,6 +634,14 @@ export default function AdminPage() {
 
         </div>
       )}
+      
+      {/* 终端光标闪烁 CSS 定义 */}
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }

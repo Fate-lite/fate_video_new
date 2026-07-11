@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cacheDb } from "@/lib/db";
 import { getSources } from "@/lib/sources";
+import { addAdminLog } from "@/lib/logger";
 
 function checkAdminAuth(req: NextRequest): boolean {
   const token = req.cookies.get("fate_admin_token")?.value;
@@ -26,12 +27,14 @@ async function pingSource(url: string): Promise<{ api_url: string; is_online: nu
 
     const latency = Date.now() - start;
     if (res.status === 200) {
+      addAdminLog("INFO", `源站 [${url.replace("https://", "").replace("http://", "").split("/")[0]}] 测速在线: ${latency}ms`);
       return { api_url: url, is_online: 1, latency };
     }
   } catch {
     // 捕获 Timeout 或 Abort
   }
 
+  addAdminLog("WARN", `源站 [${url.replace("https://", "").replace("http://", "").split("/")[0]}] 测速离线或超时`);
   return { api_url: url, is_online: 0, latency: 9999 };
 }
 
@@ -42,6 +45,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    addAdminLog("INFO", "开始运行采集源一键并发测速诊断流水线...");
     const sources = getSources();
     const now = Math.floor(Date.now() / 1000);
 
@@ -58,6 +62,9 @@ export async function POST(req: NextRequest) {
         })
       )
     );
+
+    const onlineCount = results.filter((r) => r.is_online === 1).length;
+    addAdminLog("SUCCESS", `诊断流水线执行完毕，共 ${sources.length} 个源。在线: ${onlineCount} 个，离线: ${sources.length - onlineCount} 个。`);
 
     return NextResponse.json({
       success: true,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cacheDb } from "@/lib/db";
+import { addAdminLog } from "@/lib/logger";
 
 function checkAdminAuth(req: NextRequest): boolean {
   const token = req.cookies.get("fate_admin_token")?.value;
@@ -16,13 +17,13 @@ export async function POST(req: NextRequest) {
     const { type } = await req.json();
 
     if (type === "all" || type === "cache") {
-      // 清空影视缓存
       await cacheDb.cache.deleteMany();
+      addAdminLog("WARN", "管理员手动清空了全站已下载的影视接口缓存 (cache)");
     }
     
     if (type === "all" || type === "search") {
-      // 清空搜索历史
       await cacheDb.search_history.deleteMany();
+      addAdminLog("WARN", "管理员手动清空了全站搜索排行词历史 (search_history)");
     }
 
     return NextResponse.json({ success: true, msg: "缓存已清理完毕" });
