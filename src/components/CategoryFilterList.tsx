@@ -12,11 +12,20 @@ interface CategoryFilterListProps {
 const YEARS = ["全部", "2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "更早"];
 const AREAS = ["全部", "中国大陆", "中国香港", "美国", "日本", "韩国", "欧洲", "其他"];
 
+// 各分类专属的影视类型标签列表
+const GENRES_MAP: Record<string, string[]> = {
+  "电影": ["全部", "动作", "喜剧", "爱情", "科幻", "悬疑", "惊悚", "恐怖", "犯罪", "战争", "纪录"],
+  "电视剧": ["全部", "古装", "都市", "青春", "悬疑", "科幻", "喜剧", "武侠", "战争", "历史"],
+  "综艺": ["全部", "真人秀", "选秀", "脱口秀", "访谈", "情感", "搞笑", "美食", "音乐"],
+  "动漫": ["全部", "热血", "冒险", "科幻", "奇幻", "青春", "搞笑", "推理", "治愈"],
+};
+
 export default function CategoryFilterList({ initialList, typeName }: CategoryFilterListProps) {
   // 前端维护当前的影视库状态，允许按需 lazy-collect 追加数据
   const [videoList, setVideoList] = useState<Video[]>(initialList);
   const [selectedYear, setSelectedYear] = useState("全部");
   const [selectedArea, setSelectedArea] = useState("全部");
+  const [selectedGenre, setSelectedGenre] = useState("全部");
   
   const [isLazyLoading, setIsLazyLoading] = useState(false);
   const [hasLazyFetched, setHasLazyFetched] = useState(false);
@@ -36,6 +45,11 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
       case "动漫": return "dongman";
       default: return "dianying";
     }
+  }, [typeName]);
+
+  // 获取当前分类所拥有的类型标签
+  const genres = useMemo(() => {
+    return GENRES_MAP[typeName] || ["全部"];
   }, [typeName]);
 
   // 前端极速实时去重与多维度交叉过滤
@@ -67,11 +81,19 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
         }
       }
 
+      // 3. 类型过滤 (在简介、类型名、主角演员中进行多维度模糊判定)
+      if (selectedGenre !== "全部") {
+        const searchText = `${v.des} ${v.note} ${v.actor} ${v.title}`.toLowerCase();
+        if (!searchText.includes(selectedGenre.toLowerCase())) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [videoList, selectedYear, selectedArea]);
+  }, [videoList, selectedYear, selectedArea, selectedGenre]);
 
-  // 监听过滤结果数量。如果特定年份地区下的影视资源过少 (少于 12 部)，且我们还没有为该分类触发过深度懒拉取，则自动开启静默后台深度采集
+  // 监听过滤结果数量。如果特定筛选条件下的影视资源过少 (少于 12 部)，且我们还没有为该分类触发过深度懒拉取，则自动开启静默后台深度采集
   useEffect(() => {
     const triggerLazyCollect = async () => {
       setIsLazyLoading(true);
@@ -89,11 +111,11 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
       setIsLazyLoading(false);
     };
 
-    const isFilterActive = selectedYear !== "全部" || selectedArea !== "全部";
+    const isFilterActive = selectedYear !== "全部" || selectedArea !== "全部" || selectedGenre !== "全部";
     if (isFilterActive && filteredList.length < 12 && !hasLazyFetched && !isLazyLoading) {
       triggerLazyCollect();
     }
-  }, [filteredList, selectedYear, selectedArea, hasLazyFetched, isLazyLoading, categoryParam]);
+  }, [filteredList, selectedYear, selectedArea, selectedGenre, hasLazyFetched, isLazyLoading, categoryParam]);
 
   // PC 端限制默认展示 24 个视频，布局更加对称协调（如 6 列 * 4 行）
   const displayList = useMemo(() => {
@@ -109,14 +131,37 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
           <span className="w-1.5 h-6 rounded-full bg-gradient-to-b from-indigo-500 to-pink-500 animate-pulse"></span>
           <span>{typeName}大厅</span>
         </h1>
-        <p className="text-xs text-white/40 mt-1">聚合多源去重，为您实时呈递最新上线的优质{typeName}资源</p>
+        <p className="text-xs text-white/40 mt-1">子分类对齐与多页去重，为您实时呈递最新上线的优质{typeName}资源</p>
       </div>
 
       {/* 极简精致的毛玻璃分类筛选面板 */}
       <div className="glass-card rounded-2xl p-4 md:p-5 border border-white/5 flex flex-col gap-4 text-xs select-none">
         
-        {/* 按年份筛选 */}
+        {/* 按类型筛选 */}
         <div className="flex items-start gap-4">
+          <span className="text-white/30 font-bold shrink-0 py-1">类型：</span>
+          <div className="flex flex-wrap gap-1.5">
+            {genres.map((g) => (
+              <button
+                key={g}
+                onClick={() => {
+                  setSelectedGenre(g);
+                  setHasLazyFetched(false); // 改变条件，允许再次触发懒加载
+                }}
+                className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
+                  selectedGenre === g
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                    : "text-white/60 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 按年份筛选 */}
+        <div className="flex items-start gap-4 border-t border-white/5 pt-4">
           <span className="text-white/30 font-bold shrink-0 py-1">年份：</span>
           <div className="flex flex-wrap gap-1.5">
             {YEARS.map((y) => (
@@ -124,7 +169,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
                 key={y}
                 onClick={() => {
                   setSelectedYear(y);
-                  setHasLazyFetched(false); // 改变条件，允许再次为新条件触发懒加载
+                  setHasLazyFetched(false); // 改变条件，允许再次触发懒加载
                 }}
                 className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
                   selectedYear === y
@@ -147,7 +192,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
                 key={a}
                 onClick={() => {
                   setSelectedArea(a);
-                  setHasLazyFetched(false); // 改变条件，允许再次为新条件触发懒加载
+                  setHasLazyFetched(false); // 改变条件，允许再次触发懒加载
                 }}
                 className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
                   selectedArea === a
@@ -183,11 +228,12 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
           )}
         </div>
         
-        {(selectedYear !== "全部" || selectedArea !== "全部") && (
+        {(selectedYear !== "全部" || selectedArea !== "全部" || selectedGenre !== "全部") && (
           <button
             onClick={() => {
               setSelectedYear("全部");
               setSelectedArea("全部");
+              setSelectedGenre("全部");
               setHasLazyFetched(false);
             }}
             className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors cursor-pointer"
