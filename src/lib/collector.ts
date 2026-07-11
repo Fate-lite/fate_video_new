@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { cacheDb } from "./db";
 import { getSources, VideoSource } from "./sources";
+import { addAdminLog } from "./logger";
 
 export interface PlayLink {
   name: string;
@@ -209,7 +210,7 @@ function getTypeId(type: string): string {
 }
 
 // 核心业务：获取首页/大栏目数据（含高强度缓存读写）
-export async function getCategoryVideos(type: string, limit = 18): Promise<Video[]> {
+export async function getCategoryVideos(type: string, limit = 18, forceRefresh = false): Promise<Video[]> {
   const cacheKey = `category_${type}`;
   
   // 1. 读取数据库缓存
@@ -218,7 +219,7 @@ export async function getCategoryVideos(type: string, limit = 18): Promise<Video
   });
 
   const now = Math.floor(Date.now() / 1000);
-  if (cached && cached.expire_at > now) {
+  if (!forceRefresh && cached && cached.expire_at > now) {
     try {
       return JSON.parse(cached.data).slice(0, limit);
     } catch {
@@ -331,3 +332,28 @@ export async function getVideoDetail(title: string, type: string): Promise<Video
   const match = list.find((v) => v.id === targetId);
   return match || null;
 }
+
+// 核心业务：自动定时采集大栏目并预热缓存
+export async function warmupAllCategories() {
+  const categories = ["dianying", "dianshi", "zongyi", "dongman"];
+  const typeMap: Record<string, string> = {
+    dianying: "电影",
+    dianshi: "电视剧",
+    zongyi: "综艺",
+    dongman: "动漫"
+  };
+
+  addAdminLog("INFO", ">>> 自动后台定时采集预热流水线启动...");
+  
+  try {
+    for (const type of categories) {
+      addAdminLog("INFO", `正在穿透更新 [${typeMap[type]}] 分类缓存数据...`);
+      // 穿透拉取 80 个去重新数据入库
+      await getCategoryVideos(type, 80, true);
+    }
+    addAdminLog("SUCCESS", "自动后台定时采集任务全部执行成功，缓存已重置，影片秒开就绪！");
+  } catch (error: any) {
+    addAdminLog("ERROR", `自动后台定时采集异常中断: ${error.message || error}`);
+  }
+}
+
