@@ -23,6 +23,8 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
       </head>
       <body className="min-h-full flex flex-col">
+        {/* 全局极光背景晕染 */}
+        <div className="aurora-backdrop"></div>
         <AuthProvider>
           <Header />
           <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8 py-6">

@@ -122,22 +122,27 @@ function PlayContent() {
       {/* 左侧：播放器与影片详情介绍 */}
       <div className="lg:col-span-2 flex flex-col gap-4">
         
-        {/* HLS 播放器 */}
-        {currentEpisode ? (
-          <VideoPlayer
-            url={currentEpisode.url}
-            onTimeUpdate={(time) => {
-              // 节流上报：每 10 秒上报一次进度，或在视频开始时上报
-              if (Math.floor(time) % 10 === 0) {
-                reportHistory(time);
-              }
-            }}
-          />
-        ) : (
-          <div className="w-full aspect-video rounded-2xl bg-black flex items-center justify-center text-xs text-white/30 border border-white/5">
-            该播放源下暂无集数链接
-          </div>
-        )}
+        {/* HLS 播放器 (影院流光溢彩氛围灯外罩) */}
+        <div className="relative w-full aspect-video rounded-3xl overflow-hidden glass-card border border-white/10 shadow-[0_20px_50px_rgba(99,102,241,0.25)]">
+          {/* 后置的高斯模糊氛围发光光晕 */}
+          <div className="absolute -inset-10 bg-gradient-to-tr from-indigo-500/15 via-purple-500/10 to-pink-500/15 blur-3xl opacity-75 -z-10 pointer-events-none animate-pulse duration-[8000ms]"></div>
+          
+          {currentEpisode ? (
+            <VideoPlayer
+              url={currentEpisode.url}
+              onTimeUpdate={(time) => {
+                // 节流上报：每 10 秒上报一次进度，或在视频开始时上报
+                if (Math.floor(time) % 10 === 0) {
+                  reportHistory(time);
+                }
+              }}
+            />
+          ) : (
+            <div className="w-full h-full bg-black/40 flex items-center justify-center text-xs text-white/30">
+              该播放源下暂无集数链接
+            </div>
+          )}
+        </div>
 
         {/* 精致防骗安全警示条 */}
         {showWarning && (
@@ -208,7 +213,7 @@ function PlayContent() {
         
         {/* 1. 播放源切换 TAB */}
         <div className="glass-card rounded-2xl p-4 border border-white/5">
-          <div className="text-xs font-bold text-white/40 mb-3 tracking-wider">选择解析播放源</div>
+          <div className="text-xs font-extrabold text-white/40 mb-3 tracking-widest uppercase">选择解析播放源</div>
           <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
             {video.sources.map((src, idx) => (
               <button
@@ -217,15 +222,17 @@ function PlayContent() {
                   setActiveSourceIdx(idx);
                   setActiveEpIdx(0); // 切换源时默认回滚到第一集
                 }}
-                className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`w-full text-left px-4 py-3 rounded-xl text-xs font-black transition-all cursor-pointer border ${
                   activeSourceIdx === idx
-                    ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-lg shadow-indigo-500/10"
-                    : "bg-white/5 border border-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                    ? "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white border-transparent shadow-lg shadow-indigo-500/20"
+                    : "bg-white/5 border-white/5 text-white/60 hover:bg-white/10 hover:text-white hover:border-indigo-500/20"
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="truncate">{src.sourceName}</span>
-                  <span className="text-[10px] text-white/30 font-semibold">{src.links.length}个播放流</span>
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${
+                    activeSourceIdx === idx ? "bg-white/20 text-white" : "bg-white/5 text-white/30"
+                  }`}>{src.links.length}个播放流</span>
                 </div>
               </button>
             ))}
@@ -234,9 +241,9 @@ function PlayContent() {
 
         {/* 2. 集数列表 */}
         <div className="glass-card rounded-2xl p-5 border border-white/5 flex-1 flex flex-col min-h-[300px]">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-white/40 tracking-wider">集数列表</span>
-            <span className="text-[10px] text-white/30 font-semibold">共 {currentSource?.links.length || 0} 集</span>
+          <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-3">
+            <span className="text-xs font-extrabold text-white/40 tracking-widest uppercase">集数列表</span>
+            <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">共 {currentSource?.links.length || 0} 集</span>
           </div>
 
           {/* 动态计算平均字符长度，如果包含长字数（例如综艺“第20260515期”）则自动降级为双列宽距排版 */}
@@ -253,10 +260,10 @@ function PlayContent() {
                     key={idx}
                     onClick={() => setActiveEpIdx(idx)}
                     title={ep.name}
-                    className={`py-2.5 px-2 text-center rounded-lg text-xs font-bold transition-all truncate cursor-pointer ${
+                    className={`py-2.5 px-2 text-center rounded-xl text-xs font-black transition-all duration-300 truncate cursor-pointer border ${
                       activeEpIdx === idx
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                        : "bg-white/5 border border-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                        ? "bg-gradient-to-tr from-indigo-500 to-pink-500 text-white border-transparent shadow-lg shadow-indigo-500/35"
+                        : "bg-white/5 border-white/5 text-white/70 hover:bg-white/10 hover:text-white hover:border-indigo-500/30"
                     }`}
                   >
                     {ep.name}

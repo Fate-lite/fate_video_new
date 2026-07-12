@@ -130,8 +130,8 @@ export default function Header() {
         {/* 3. 右侧：搜索栏与登录区 (手机端紧凑设计，搜索紧贴登录头像) */}
         <div className="flex items-center gap-2 shrink-0">
           
-          {/* PC 搜索栏 */}
-          <form onSubmit={handleSearchSubmit} className="hidden md:flex items-center bg-white/5 border border-white/10 rounded-full px-3 py-1.5 focus-within:border-indigo-500/50 transition-all w-60">
+          {/* PC 搜索栏 (聚焦时平滑伸缩并带霓虹投影) */}
+          <form onSubmit={handleSearchSubmit} className="hidden md:flex items-center bg-white/5 border border-white/10 rounded-full px-3.5 py-1.5 focus-within:border-indigo-500/40 focus-within:shadow-[0_0_15px_rgba(99,102,241,0.15)] focus-within:w-72 transition-all duration-500 ease-out w-56">
             <input
               type="text"
               placeholder="搜索影片、导演、主演..."
@@ -139,7 +139,7 @@ export default function Header() {
               onChange={(e) => setSearchWd(e.target.value)}
               className="bg-transparent text-xs text-white placeholder-white/40 focus:outline-none w-full"
             />
-            <button type="submit" className="text-white/40 hover:text-white transition-colors cursor-pointer">
+            <button type="submit" className="text-white/40 hover:text-indigo-400 transition-colors cursor-pointer">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             </button>
           </form>
