@@ -184,31 +184,8 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
       {/* 极简精致的毛玻璃分类筛选面板 */}
       <div className="glass-card rounded-2xl p-4 md:p-5 border border-white/5 flex flex-col gap-4 text-xs select-none">
         
-        {/* 按类型筛选 */}
+        {/* 按年份筛选 (排第一行) */}
         <div className="flex items-start gap-4">
-          <span className="text-white/30 font-bold shrink-0 py-1">类型：</span>
-          <div className="flex flex-wrap gap-1.5">
-            {genres.map((g) => (
-              <button
-                key={g}
-                onClick={() => {
-                  setSelectedGenre(g);
-                  setHasLazyFetched(false);
-                }}
-                className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
-                  selectedGenre === g
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-                    : "text-white/60 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 按年份筛选 */}
-        <div className="flex items-start gap-4 border-t border-white/5 pt-4">
           <span className="text-white/30 font-bold shrink-0 py-1">年份：</span>
           <div className="flex flex-wrap gap-1.5">
             {YEARS.map((y) => (
@@ -225,6 +202,29 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
                 }`}
               >
                 {y}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 按类型筛选 (排第二行) */}
+        <div className="flex items-start gap-4 border-t border-white/5 pt-4">
+          <span className="text-white/30 font-bold shrink-0 py-1">类型：</span>
+          <div className="flex flex-wrap gap-1.5">
+            {genres.map((g) => (
+              <button
+                key={g}
+                onClick={() => {
+                  setSelectedGenre(g);
+                  setHasLazyFetched(false);
+                }}
+                className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
+                  selectedGenre === g
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                    : "text-white/60 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                {g}
               </button>
             ))}
           </div>
