@@ -60,9 +60,9 @@ export default function Header() {
           <span className="text-xl font-black tracking-wider text-white">FATE<span className="text-indigo-400">.TV</span></span>
         </Link>
 
-        {/* 2. 中间：横向滑动分类菜单 (手机端极致展示，支持横向滑动) */}
+        {/* 2. 中间：横向滑动分类菜单 (手机端常驻，采用原生a标签跳转以完美触发 SSR 加载动效与骨架屏) */}
         <nav className="flex-1 overflow-x-auto hide-scrollbar flex items-center justify-start md:justify-center gap-6 text-sm font-semibold scroll-smooth select-none px-2">
-          <Link
+          <a
             href="/"
             className={`py-1 shrink-0 transition-colors relative ${
               pathname === "/"
@@ -71,8 +71,8 @@ export default function Header() {
             }`}
           >
             精选
-          </Link>
-          <Link
+          </a>
+          <a
             href="/list/dianying"
             className={`py-1 shrink-0 transition-colors relative ${
               pathname === "/list/dianying"
@@ -81,8 +81,8 @@ export default function Header() {
             }`}
           >
             电影
-          </Link>
-          <Link
+          </a>
+          <a
             href="/list/dianshi"
             className={`py-1 shrink-0 transition-colors relative ${
               pathname === "/list/dianshi"
@@ -91,8 +91,8 @@ export default function Header() {
             }`}
           >
             电视剧
-          </Link>
-          <Link
+          </a>
+          <a
             href="/list/zongyi"
             className={`py-1 shrink-0 transition-colors relative ${
               pathname === "/list/zongyi"
@@ -101,8 +101,8 @@ export default function Header() {
             }`}
           >
             综艺
-          </Link>
-          <Link
+          </a>
+          <a
             href="/list/dongman"
             className={`py-1 shrink-0 transition-colors relative ${
               pathname === "/list/dongman"
@@ -111,7 +111,7 @@ export default function Header() {
             }`}
           >
             动漫
-          </Link>
+          </a>
         </nav>
 
         {/* 3. 右侧：搜索栏与登录区 (手机端紧凑设计，搜索紧贴登录头像) */}
