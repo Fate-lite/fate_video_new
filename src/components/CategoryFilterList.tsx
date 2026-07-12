@@ -178,7 +178,6 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
           <span className="w-1.5 h-6 rounded-full bg-gradient-to-b from-indigo-500 to-pink-500 animate-pulse"></span>
           <span>{typeName}大厅</span>
         </h1>
-        <p className="text-xs text-white/40 mt-1">智能多源合并与深度过滤，为您实时呈递最新上线的优质{typeName}资源</p>
       </div>
 
       {/* 极简精致的毛玻璃分类筛选面板 */}
