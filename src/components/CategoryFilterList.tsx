@@ -143,7 +143,9 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
     const triggerLazyCollect = async () => {
       setIsLazyLoading(true);
       try {
-        const res = await fetch(`/api/video/lazy-collect?type=${categoryParam}`);
+        const res = await fetch(
+          `/api/video/lazy-collect?type=${categoryParam}&genre=${encodeURIComponent(selectedGenre)}`
+        );
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.list)) {
