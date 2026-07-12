@@ -13,8 +13,15 @@ export default function Header() {
   const [showSearch, setShowSearch] = useState(false); // 手机端展开状态
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [favoritesCount, setFavoritesCount] = useState(0);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
+
+  // 跳转处理，激活客户端 Loading
+  const handleNavClick = (href: string) => {
+    if (pathname === href) return;
+    setIsNavigating(true);
+  };
 
   // 监听点击外部关闭下拉框
   useEffect(() => {
@@ -49,11 +56,12 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full glass-card border-b border-white/5 backdrop-blur-md px-4 py-3 md:px-8">
+    <>
+      <header className="sticky top-0 z-50 w-full glass-card border-b border-white/5 backdrop-blur-md px-4 py-3 md:px-8">
       <div className="mx-auto max-w-7xl flex items-center justify-between gap-4">
         
         {/* 1. LOGO */}
-        <Link href="/" className="flex items-center gap-2 shrink-0">
+        <Link href="/" onClick={() => handleNavClick("/")} className="flex items-center gap-2 shrink-0">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-pink-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
             F
           </div>
@@ -64,6 +72,7 @@ export default function Header() {
         <nav className="flex-1 overflow-x-auto hide-scrollbar flex items-center justify-start md:justify-center gap-6 text-sm font-semibold scroll-smooth select-none px-2">
           <a
             href="/"
+            onClick={() => handleNavClick("/")}
             className={`py-1 shrink-0 transition-colors relative ${
               pathname === "/"
                 ? "text-indigo-400 font-extrabold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-4 after:h-0.5 after:bg-indigo-400 after:rounded-full"
@@ -74,6 +83,7 @@ export default function Header() {
           </a>
           <a
             href="/list/dianying"
+            onClick={() => handleNavClick("/list/dianying")}
             className={`py-1 shrink-0 transition-colors relative ${
               pathname === "/list/dianying"
                 ? "text-indigo-400 font-extrabold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-4 after:h-0.5 after:bg-indigo-400 after:rounded-full"
@@ -84,6 +94,7 @@ export default function Header() {
           </a>
           <a
             href="/list/dianshi"
+            onClick={() => handleNavClick("/list/dianshi")}
             className={`py-1 shrink-0 transition-colors relative ${
               pathname === "/list/dianshi"
                 ? "text-indigo-400 font-extrabold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-4 after:h-0.5 after:bg-indigo-400 after:rounded-full"
@@ -94,6 +105,7 @@ export default function Header() {
           </a>
           <a
             href="/list/zongyi"
+            onClick={() => handleNavClick("/list/zongyi")}
             className={`py-1 shrink-0 transition-colors relative ${
               pathname === "/list/zongyi"
                 ? "text-indigo-400 font-extrabold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-4 after:h-0.5 after:bg-indigo-400 after:rounded-full"
@@ -104,6 +116,7 @@ export default function Header() {
           </a>
           <a
             href="/list/dongman"
+            onClick={() => handleNavClick("/list/dongman")}
             className={`py-1 shrink-0 transition-colors relative ${
               pathname === "/list/dongman"
                 ? "text-indigo-400 font-extrabold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-4 after:h-0.5 after:bg-indigo-400 after:rounded-full"
@@ -221,5 +234,28 @@ export default function Header() {
         </div>
       )}
     </header>
+    
+    {/* 客户端主动跳转 Loading 遮罩层 (毛玻璃霓虹极光流光环) */}
+    {isNavigating && (
+      <div className="fixed inset-0 z-[9999] bg-[#07050e]/80 backdrop-blur-md flex flex-col items-center justify-center gap-4 select-none animate-in fade-in duration-200">
+        <div className="relative w-16 h-16 flex items-center justify-center">
+          {/* 背景圆环 */}
+          <div className="absolute inset-0 rounded-full border-4 border-white/5"></div>
+          {/* 旋转流光环 */}
+          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-indigo-500 border-r-pink-500 animate-spin duration-700"></div>
+          {/* 闪烁光点 */}
+          <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping"></div>
+        </div>
+        <div className="flex flex-col items-center gap-1.5 mt-2 animate-pulse">
+          <span className="text-sm font-black tracking-widest text-white/80">
+            FATE<span className="text-indigo-500 font-extrabold">.</span>TV
+          </span>
+          <span className="text-[10px] text-white/30 tracking-widest font-semibold uppercase">
+            正在为您同步加载最新资源...
+          </span>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
