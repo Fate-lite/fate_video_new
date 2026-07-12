@@ -60,12 +60,45 @@ export default function Header() {
       <header className="sticky top-0 z-50 w-full glass-card border-b border-white/5 backdrop-blur-md px-4 py-3 md:px-8">
       <div className="mx-auto max-w-7xl flex items-center justify-between gap-4">
         
-        {/* 1. LOGO */}
-        <Link href="/" onClick={() => handleNavClick("/")} className="flex items-center gap-2 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-pink-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
-            F
+        {/* 1. LOGO (升级为未来科技折线 F 图标与发光微缩 Capsule 药丸) */}
+        <Link 
+          href="/" 
+          onClick={() => handleNavClick("/")} 
+          className="flex items-center gap-3 shrink-0 group select-none"
+        >
+          <div className="relative flex items-center justify-center">
+            {/* SVG 未来极光 F 图标 */}
+            <svg 
+              className="w-9 h-9 transform transition-all duration-500 group-hover:rotate-12 group-hover:scale-106 filter drop-shadow-[0_0_10px_rgba(168,85,247,0.55)]" 
+              viewBox="0 0 100 100" 
+              fill="none" 
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                <linearGradient id="logo-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#6366f1" />
+                  <stop offset="50%" stopColor="#a855f7" />
+                  <stop offset="100%" stopColor="#ec4899" />
+                </linearGradient>
+              </defs>
+              {/* 外圈未来渐变半透播放盾牌 */}
+              <path d="M20 18 L80 18 L50 85 Z" fill="url(#logo-grad-1)" opacity="0.12" />
+              {/* 核心科技折角 F 图形 */}
+              <path d="M35 25 H72 L68 36 H47 L45 49 H63 L59 60 H42 L38 88 H28 Z" fill="url(#logo-grad-1)" />
+            </svg>
+            {/* 呼吸光环 */}
+            <div className="absolute inset-0 rounded-full bg-indigo-500/5 blur-md -z-10 group-hover:bg-indigo-500/20 transition-all duration-500"></div>
           </div>
-          <span className="text-xl font-black tracking-wider text-white">FATE<span className="text-indigo-400">.TV</span></span>
+          
+          <div className="flex items-center gap-1.5">
+            <span className="text-lg font-black tracking-wider text-white group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:via-indigo-200 group-hover:to-pink-200 transition-all duration-300">
+              FATE
+            </span>
+            {/* 极细致霓虹 Capsule 药丸标签 */}
+            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 group-hover:bg-pink-500/10 group-hover:text-pink-300 group-hover:border-pink-500/30 transition-all duration-500 uppercase tracking-widest shadow-[0_0_8px_rgba(99,102,241,0.15)]">
+              TV
+            </span>
+          </div>
         </Link>
 
         {/* 2. 中间：横向滑动分类菜单 (手机端常驻，采用原生a标签跳转以完美触发 SSR 加载动效与骨架屏) */}
