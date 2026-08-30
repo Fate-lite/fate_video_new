@@ -69,6 +69,8 @@ export default function Header() {
           <div className="relative flex items-center justify-center">
             {/* SVG 未来极光 F 图标 */}
             <svg 
+              width="36"
+              height="36"
               className="w-9 h-9 transform transition-all duration-500 group-hover:rotate-12 group-hover:scale-106 filter drop-shadow-[0_0_10px_rgba(168,85,247,0.55)]" 
               viewBox="0 0 100 100" 
               fill="none" 
