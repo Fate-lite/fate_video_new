@@ -26,7 +26,8 @@ RUN mkdir -p data && \
     DATABASE_URL="file:./data/user.db" npx prisma db push --schema=prisma/user.prisma --skip-generate --accept-data-loss && \
     DATABASE_URL="file:./data/fate.db" npx prisma db push --schema=prisma/cache.prisma --skip-generate --accept-data-loss
 
-# 本地已编译就绪，直接跳过 npm run build
+# 执行标准生产打包构建
+RUN npm run build
 
 # 3. 生产运行阶段
 FROM node:20-alpine AS runner
