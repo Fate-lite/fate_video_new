@@ -4,18 +4,30 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
+import SpotlightSearch from "./SpotlightSearch";
 
 export default function Header() {
   const { user, logout, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [searchWd, setSearchWd] = useState("");
-  const [showSearch, setShowSearch] = useState(false); // 手机端展开状态
+  const [showSpotlight, setShowSpotlight] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [favoritesCount, setFavoritesCount] = useState(0);
   const [isNavigating, setIsNavigating] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
+
+  // 全局监听 Cmd+K / Ctrl+K 唤起搜索
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setShowSpotlight((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
 
   // 跳转处理，激活客户端 Loading
   const handleNavClick = (href: string) => {
@@ -47,13 +59,6 @@ export default function Header() {
         .catch(() => {});
     }
   }, [user]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchWd.trim()) return;
-    router.push(`/search?wd=${encodeURIComponent(searchWd.trim())}`);
-    setShowSearch(false);
-  };
 
   return (
     <>
@@ -165,26 +170,31 @@ export default function Header() {
         {/* 3. 右侧：搜索栏与登录区 (手机端紧凑设计，搜索紧贴登录头像) */}
         <div className="flex items-center gap-2 shrink-0">
           
-          {/* PC 搜索栏 (聚焦时平滑伸缩并带霓虹投影) */}
-          <form onSubmit={handleSearchSubmit} className="hidden md:flex items-center bg-white/5 border border-white/10 rounded-full px-3.5 py-1.5 focus-within:border-indigo-500/40 focus-within:shadow-[0_0_15px_rgba(99,102,241,0.15)] focus-within:w-72 transition-all duration-500 ease-out w-56">
-            <input
-              type="text"
-              placeholder="搜索影片、导演、主演..."
-              value={searchWd}
-              onChange={(e) => setSearchWd(e.target.value)}
-              className="bg-transparent text-xs text-white placeholder-white/40 focus:outline-none w-full"
-            />
-            <button type="submit" className="text-white/40 hover:text-indigo-400 transition-colors cursor-pointer">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-            </button>
-          </form>
-
-          {/* 手机端搜索按钮 (紧贴头像) */}
-          <button
-            onClick={() => setShowSearch(!showSearch)}
-            className="md:hidden p-2 text-white/70 hover:text-white hover:bg-white/5 rounded-full transition-colors cursor-pointer"
+          {/* PC 搜索栏 (点击唤起全局 Spotlight 搜索弹窗) */}
+          <div 
+            onClick={() => setShowSpotlight(true)}
+            className="hidden md:flex items-center justify-between bg-white/5 hover:bg-white/10 border border-white/10 hover:border-indigo-500/40 rounded-full px-4 py-2 cursor-pointer transition-all duration-300 w-56 lg:w-64 group select-none shadow-sm"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            <div className="flex items-center gap-2.5 text-xs text-white/50 group-hover:text-white/80 transition-colors truncate">
+              <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span>全网极速搜索...</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-black tracking-widest text-white/40 bg-white/5 px-1.5 py-0.5 rounded-md border border-white/10 group-hover:text-indigo-300 group-hover:border-indigo-500/30 transition-all">
+              <span>⌘</span><span>K</span>
+            </div>
+          </div>
+
+          {/* 手机端搜索按钮 (点击唤起 Spotlight) */}
+          <button
+            onClick={() => setShowSpotlight(true)}
+            className="md:hidden p-2 text-white/70 hover:text-white hover:bg-white/5 rounded-full transition-colors cursor-pointer"
+            aria-label="打开搜索"
+          >
+            <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
           </button>
 
           {/* 登录/个人中心区 (紧密相连) */}
@@ -250,47 +260,35 @@ export default function Header() {
         </div>
       </div>
 
-      {/* 手机端搜索浮出层 */}
-      {showSearch && (
-        <div className="md:hidden mt-2 p-2 bg-black/30 rounded-xl border border-white/5">
-          <form onSubmit={handleSearchSubmit} className="flex items-center bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
-            <input
-              type="text"
-              placeholder="输入片名、主角进行多源搜索..."
-              value={searchWd}
-              onChange={(e) => setSearchWd(e.target.value)}
-              className="bg-transparent text-xs text-white placeholder-white/30 focus:outline-none w-full"
-              autoFocus
-            />
-            <button type="submit" className="text-white/60 hover:text-white">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-            </button>
-          </form>
+      </header>
+      
+      {/* 全局 Spotlight 极速搜索弹窗 */}
+      <SpotlightSearch 
+        isOpen={showSpotlight} 
+        onClose={() => setShowSpotlight(false)} 
+      />
+
+      {/* 客户端主动跳转 Loading 遮罩层 (毛玻璃霓虹极光流光环) */}
+      {isNavigating && (
+        <div className="fixed inset-0 z-[9999] bg-[#07050e]/80 backdrop-blur-md flex flex-col items-center justify-center gap-4 select-none animate-in fade-in duration-200">
+          <div className="relative w-16 h-16 flex items-center justify-center">
+            {/* 背景圆环 */}
+            <div className="absolute inset-0 rounded-full border-4 border-white/5"></div>
+            {/* 旋转流光环 */}
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-indigo-500 border-r-pink-500 animate-spin duration-700"></div>
+            {/* 闪烁光点 */}
+            <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping"></div>
+          </div>
+          <div className="flex flex-col items-center gap-1.5 mt-2 animate-pulse">
+            <span className="text-sm font-black tracking-widest text-white/80">
+              FATE<span className="text-indigo-500 font-extrabold">.</span>TV
+            </span>
+            <span className="text-[10px] text-white/30 tracking-widest font-semibold uppercase">
+              正在为您同步加载最新资源...
+            </span>
+          </div>
         </div>
       )}
-    </header>
-    
-    {/* 客户端主动跳转 Loading 遮罩层 (毛玻璃霓虹极光流光环) */}
-    {isNavigating && (
-      <div className="fixed inset-0 z-[9999] bg-[#07050e]/80 backdrop-blur-md flex flex-col items-center justify-center gap-4 select-none animate-in fade-in duration-200">
-        <div className="relative w-16 h-16 flex items-center justify-center">
-          {/* 背景圆环 */}
-          <div className="absolute inset-0 rounded-full border-4 border-white/5"></div>
-          {/* 旋转流光环 */}
-          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-indigo-500 border-r-pink-500 animate-spin duration-700"></div>
-          {/* 闪烁光点 */}
-          <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping"></div>
-        </div>
-        <div className="flex flex-col items-center gap-1.5 mt-2 animate-pulse">
-          <span className="text-sm font-black tracking-widest text-white/80">
-            FATE<span className="text-indigo-500 font-extrabold">.</span>TV
-          </span>
-          <span className="text-[10px] text-white/30 tracking-widest font-semibold uppercase">
-            正在为您同步加载最新资源...
-          </span>
-        </div>
-      </div>
-    )}
     </>
   );
 }

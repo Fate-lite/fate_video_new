@@ -230,6 +230,23 @@ export async function getPlayHistory(userId: number) {
   });
 }
 
+export async function removePlayHistory(userId: number, id: number) {
+  return await userDb.user_history.deleteMany({
+    where: {
+      id,
+      user_id: userId,
+    },
+  });
+}
+
+export async function clearPlayHistory(userId: number) {
+  return await userDb.user_history.deleteMany({
+    where: {
+      user_id: userId,
+    },
+  });
+}
+
 // 5. 追剧收藏增删改查
 export async function toggleFavorite(userId: number, vid: string, title: string, pic: string): Promise<{ isFavorited: boolean }> {
   const now = Math.floor(Date.now() / 1000);

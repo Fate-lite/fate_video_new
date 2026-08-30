@@ -22,23 +22,69 @@ export default function HistoryPage() {
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [list, setList] = useState<HistoryItem[]>([]);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const fetchHistory = () => {
+    setLoading(true);
+    fetch("/api/history")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.history) {
+          setList(data.history);
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  };
 
   useEffect(() => {
     if (!authLoading && user) {
-      setLoading(true);
-      fetch("/api/history")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success && data.history) {
-            setList(data.history);
-          }
-          setLoading(false);
-        })
-        .catch(() => setLoading(false));
+      fetchHistory();
     } else if (!authLoading && !user) {
       setLoading(false);
     }
   }, [user, authLoading]);
+
+  // 删除单条
+  const handleDeleteItem = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (actionLoading) return;
+    setActionLoading(true);
+
+    try {
+      const res = await fetch("/api/history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setList((prev) => prev.filter((item) => item.id !== id));
+      }
+    } catch {}
+    setActionLoading(false);
+  };
+
+  // 一键清空
+  const handleClearAll = async () => {
+    if (!confirm("确定要清空全部播放历史记录吗？")) return;
+    if (actionLoading) return;
+    setActionLoading(true);
+
+    try {
+      const res = await fetch("/api/history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearAll: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setList([]);
+      }
+    } catch {}
+    setActionLoading(false);
+  };
 
   if (!authLoading && !user) {
     return (
@@ -57,11 +103,26 @@ export default function HistoryPage() {
 
   return (
     <div className="w-full">
-      <div className="border-b border-white/5 pb-4 mb-8">
-        <h1 className="text-xl md:text-2xl font-black text-white flex items-center gap-2">
-          <span>播放历史</span>
-        </h1>
-        <p className="text-xs text-white/40 mt-1">系统为您保存最近观看的 50 条视频记录</p>
+      <div className="border-b border-white/5 pb-4 mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl md:text-2xl font-black text-white flex items-center gap-2">
+            <span>播放历史</span>
+          </h1>
+          <p className="text-xs text-white/40 mt-1">系统为您保存最近观看的 50 条视频记录</p>
+        </div>
+
+        {list.length > 0 && (
+          <button
+            onClick={handleClearAll}
+            disabled={actionLoading}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold text-white/60 hover:text-red-400 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/20 transition-all cursor-pointer"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>清空全部</span>
+          </button>
+        )}
       </div>
 
       {authLoading || (loading && list.length === 0) ? (
@@ -89,8 +150,17 @@ export default function HistoryPage() {
           {list.map((item) => (
             <div
               key={item.id}
-              className="group glass-card rounded-2xl overflow-hidden border border-white/5 hover:border-indigo-500/20 transition-all flex flex-col"
+              className="group glass-card rounded-2xl overflow-hidden border border-white/5 hover:border-indigo-500/20 transition-all flex flex-col relative"
             >
+              {/* 单条删除悬浮按钮 */}
+              <button
+                onClick={(e) => handleDeleteItem(e, item.id)}
+                title="从历史中移除"
+                className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/70 hover:bg-red-500/90 text-white/70 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer backdrop-blur-md border border-white/10"
+              >
+                ✕
+              </button>
+
               {/* 海报 */}
               <div className="aspect-[3/4] relative overflow-hidden bg-white/5">
                 <img
@@ -121,7 +191,7 @@ export default function HistoryPage() {
 
                 <Link
                   href={`/play?title=${encodeURIComponent(item.title)}&type=dianying`}
-                  className="w-full text-center py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-[10px] font-bold transition-all"
+                  className="w-full text-center py-2 rounded-xl bg-gradient-to-r from-indigo-500/15 to-pink-500/15 hover:from-indigo-500/30 hover:to-pink-500/30 text-indigo-300 border border-indigo-500/20 text-xs font-black transition-all"
                 >
                   继续续播 →
                 </Link>

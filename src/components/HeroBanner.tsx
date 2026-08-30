@@ -95,22 +95,35 @@ export default function HeroBanner({ bannerList }: HeroBannerProps) {
             isTransitioning ? "translate-y-2 opacity-0" : "translate-y-0 opacity-100"
           }`}
         >
-          <span className="px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-gradient-to-r from-indigo-500/20 to-pink-500/20 text-indigo-200 border border-indigo-500/35 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
-            🎬 今日独家推荐
-          </span>
-          <h1 className="text-3xl md:text-5xl font-black text-white mt-5 tracking-wide leading-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-gradient-to-r from-indigo-500/20 to-pink-500/20 text-indigo-200 border border-indigo-500/35 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+              🎬 今日精选大片
+            </span>
+            {activeVideo.year && (
+              <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-white/10 text-white/70">
+                {activeVideo.year}
+              </span>
+            )}
+            {activeVideo.area && (
+              <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-white/10 text-white/70">
+                {activeVideo.area}
+              </span>
+            )}
+          </div>
+          <h1 className="text-3xl md:text-5xl font-black text-white tracking-wide leading-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
             {activeVideo.title}
           </h1>
           <p className="text-xs md:text-sm text-white/70 mt-4 leading-relaxed line-clamp-2 md:line-clamp-3 drop-shadow-[0_1px_5px_rgba(0,0,0,0.6)] font-medium">
             {activeVideo.des ||
               "今日热播推荐，点击下方按钮开始高清解析播放。多源并发保障，去重过滤，为您提供极速流畅的观影体验。"}
           </p>
-          <div className="flex items-center gap-4 mt-8">
+          <div className="flex items-center gap-4 mt-7">
             <Link
               href={`/play?title=${encodeURIComponent(activeVideo.title)}&type=${activeVideo.type}`}
-              className="px-7 py-2.5 md:px-9 md:py-3 rounded-full text-xs font-black text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 shadow-xl shadow-indigo-600/30 hover:shadow-indigo-500/50 tracking-widest transition-all hover:scale-104 active:scale-95 duration-300"
+              className="px-7 py-2.5 md:px-9 md:py-3 rounded-full text-xs font-black text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 shadow-xl shadow-indigo-600/30 hover:shadow-indigo-500/50 tracking-widest transition-all hover:scale-104 active:scale-95 duration-300 flex items-center gap-2"
             >
-              立即播放
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              <span>立即播放</span>
             </Link>
           </div>
         </div>
