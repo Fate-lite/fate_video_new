@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client-user"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model email_verifications {
+  id         Int     @id @default(autoincrement())
+  email      String
+  code       String
+  type       String? @default("register")
+  created_at Int
+  expire_at  Int
+}
+
+model user_favorites {
+  id         Int    @id @default(autoincrement())
+  user_id    Int
+  vid        String
+  title      String
+  pic        String
+  created_at Int
+
+  @@unique([user_id, vid])
+}
+
+model user_history {
+  id         Int    @id @default(autoincrement())
+  user_id    Int
+  vid        String
+  title      String
+  pic        String
+  site       String
+  episode    String
+  progress   Int
+  updated_at Int
+
+  @@unique([user_id, vid])
+}
+
+model users {
+  id            Int     @id @default(autoincrement())
+  email         String  @unique
+  password_hash String
+  nickname      String?
+  created_at    Int
+  status        Int?    @default(1)
+}

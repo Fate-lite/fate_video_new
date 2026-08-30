@@ -1,36 +1,5 @@
-# 1. 基础依赖安装阶段
-FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat openssl
-WORKDIR /app
-
-COPY package.json package-lock.json ./
-RUN npm ci
-
-# 2. 编译打包阶段
-FROM node:20-alpine AS builder
-RUN apk add --no-cache openssl
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-
-# 设置构建期间的环境变量
-ENV USER_DB_URL="file:/app/data/user.db"
-ENV CACHE_DB_URL="file:/app/data/fate.db"
-
-# Prisma generate
-RUN DATABASE_URL="file:./data/user.db" npx prisma generate --schema=prisma/user.prisma && \
-    DATABASE_URL="file:./data/fate.db" npx prisma generate --schema=prisma/cache.prisma
-
-# 创建临时空数据库以支持 Next.js 预渲染
-RUN mkdir -p data && \
-    DATABASE_URL="file:./data/user.db" npx prisma db push --schema=prisma/user.prisma --skip-generate --accept-data-loss && \
-    DATABASE_URL="file:./data/fate.db" npx prisma db push --schema=prisma/cache.prisma --skip-generate --accept-data-loss
-
-# 执行标准生产打包构建
-RUN npm run build
-
-# 3. 生产运行阶段
-FROM node:20-alpine AS runner
+# 极速轻量 Standalone 生产运行镜像
+FROM node:20-alpine
 RUN apk add --no-cache openssl
 WORKDIR /app
 
@@ -42,11 +11,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # 创建 data 目录以便持久化挂载 SQLite
 RUN mkdir -p data
 
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/docker-entrypoint.sh ./docker-entrypoint.sh
+COPY public ./public
+COPY .next/standalone ./
+COPY .next/static ./.next/static
+COPY prisma ./prisma
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3000
