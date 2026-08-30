@@ -26,35 +26,73 @@ export async function GET(req: NextRequest) {
     const activeSources = await getActiveSources(6);
     let incomingList: Video[] = [];
 
-    // 2. 核心智能兼容机制：如果筛选的是“短剧”或“AI动漫”，各大采集源站很多没有独立分类。
-    // 我们采用【全局关键字检索注入】直接在后台并发向源站搜索对应的视频，并回填进该分类大厅下！
+    // 2. 核心智能兼容机制：如果筛选的是“短剧”或“AI漫剧/AI动漫”，各大采集源站有专属的独立子分类。
+    // 我们采用【子分类 ID 精准直采 + 全局热词并发检索】双轨穿透机制，瞬间注入海量高品质短剧与AI漫剧！
     if (genre === "短剧") {
-      addAdminLog("INFO", `[智能懒加载] 正在为短剧类别发起全局多源关键字 [短剧, 微短剧, 爽剧] 检索穿透...`);
-      const kws = ["短剧", "微短剧", "爽剧"];
+      addAdminLog("INFO", `[智能懒加载] 正在为短剧大类发起【子分类直采 + 关键词穿透】...`);
+      const kws = ["短剧", "微短剧", "爽剧", "逆袭", "战神", "重生", "总裁"];
+      
+      // 轨道 1: 关键词并发搜索
       const searchPromises = kws.map((kw) =>
         fetchAndMergeFromSources(activeSources, {
           ac: "detail",
           wd: kw,
         }, 3500)
       );
-      const results = await Promise.all(searchPromises);
-      // 强行将抓回的短剧视频归类为电视剧
-      incomingList = results.flat().map((v) => ({ ...v, type: "dianshi" }));
-    } else if (genre === "AI动漫") {
-      addAdminLog("INFO", `[智能懒加载] 正在为AI动漫类别发起全局多源关键字 [AI动漫, AI动画] 检索穿透...`);
-      const kws = ["AI", "AI动漫", "AI动画"];
+      
+      // 轨道 2: 电视剧及短剧子分类前 2 页深度并发直采
+      const pagePromises = [1, 2].map((pg) =>
+        fetchAndMergeFromSources(
+          activeSources,
+          {
+            ac: "detail",
+            pg: pg.toString(),
+          },
+          3500,
+          "dianshi"
+        )
+      );
+
+      const [searchResults, pageResults] = await Promise.all([
+        Promise.all(searchPromises),
+        Promise.all(pagePromises),
+      ]);
+
+      incomingList = [...searchResults.flat(), ...pageResults.flat()].map((v) => ({ ...v, type: "dianshi" }));
+    } else if (genre === "AI漫剧" || genre === "AI动漫" || genre === "动态漫") {
+      addAdminLog("INFO", `[智能懒加载] 正在为 AI漫剧 类别发起【子分类直采 + 关键词穿透】...`);
+      const kws = ["AI", "AI漫剧", "AI动漫", "动态漫", "漫剧", "修仙", "重生"];
+      
+      // 轨道 1: 关键词并发搜索
       const searchPromises = kws.map((kw) =>
         fetchAndMergeFromSources(activeSources, {
           ac: "detail",
           wd: kw,
         }, 3500)
       );
-      const results = await Promise.all(searchPromises);
-      // 强行将抓回的AI视频归类为动漫
-      incomingList = results.flat().map((v) => ({ ...v, type: "dongman" }));
+
+      // 轨道 2: 动漫及 AI漫剧子分类前 2 页深度并发直采
+      const pagePromises = [1, 2].map((pg) =>
+        fetchAndMergeFromSources(
+          activeSources,
+          {
+            ac: "detail",
+            pg: pg.toString(),
+          },
+          3500,
+          "dongman"
+        )
+      );
+
+      const [searchResults, pageResults] = await Promise.all([
+        Promise.all(searchPromises),
+        Promise.all(pagePromises),
+      ]);
+
+      incomingList = [...searchResults.flat(), ...pageResults.flat()].map((v) => ({ ...v, type: "dongman" }));
     } else {
       // 其他普通标签少于 12 部时，常规并发拉取各大源站第 3, 4 页数据
-      addAdminLog("INFO", `[懒加载采集] 分类 [${type}] 下内容较少，正在并发调取各大源站第 3, 4 页数据...`);
+      addAdminLog("INFO", `[懒加载采集] 分类 [${type}] 标签 [${genre}] 内容较少，正在并发调取各大源站第 3, 4 页数据...`);
       const pgs = [3, 4];
       const pagePromises = pgs.map((pg) =>
         fetchAndMergeFromSources(

@@ -18,7 +18,7 @@ const GENRES_MAP: Record<string, string[]> = {
   "电影": ["全部", "动作", "喜剧", "爱情", "科幻", "悬疑", "惊悚", "恐怖", "犯罪", "战争", "纪录"],
   "电视剧": ["全部", "短剧", "古装", "都市", "青春", "悬疑", "科幻", "喜剧", "武侠", "战争", "历史"],
   "综艺": ["全部", "真人秀", "选秀", "脱口秀", "访谈", "情感", "搞笑", "美食", "音乐"],
-  "动漫": ["全部", "AI动漫", "热血", "冒险", "科幻", "奇幻", "青春", "搞笑", "推理", "治愈"],
+  "动漫": ["全部", "AI漫剧", "热血", "冒险", "科幻", "奇幻", "青春", "搞笑", "推理", "治愈"],
 };
 
 export default function CategoryFilterList({ initialList, typeName }: CategoryFilterListProps) {
@@ -84,11 +84,25 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
         }
       }
 
-      // 3. 类型过滤 (在简介、类型名、主角演员中进行多维度模糊判定)
+      // 3. 类型过滤 (优先精准对比原始细分类目 typeName，辅以简介、演员、标题多维度智能扩展判定)
       if (selectedGenre !== "全部") {
-        const searchText = `${v.des} ${v.note} ${v.actor} ${v.title}`.toLowerCase();
-        if (!searchText.includes(selectedGenre.toLowerCase())) {
-          return false;
+        const rawType = (v.typeName || "").toLowerCase();
+        const searchText = `${v.typeName || ""} ${v.des || ""} ${v.note || ""} ${v.actor || ""} ${v.title || ""}`.toLowerCase();
+        
+        if (selectedGenre === "AI漫剧" || selectedGenre === "AI动漫") {
+          // AI漫剧专项增强匹配：包含 AI漫剧, AI动漫, AI动画, 动态漫, 漫剧, 动态漫画 或 标题/简介含 AI
+          const isAi = rawType.includes("ai") || rawType.includes("漫剧") || rawType.includes("动态漫") || rawType.includes("动漫") ||
+                       searchText.includes("ai漫剧") || searchText.includes("ai动漫") || searchText.includes("动态漫") || searchText.includes("漫剧") || searchText.includes("ai");
+          if (!isAi) return false;
+        } else if (selectedGenre === "短剧") {
+          // 短剧专项增强匹配：包含 短剧, 爽文短剧, 反转爽剧, 爽剧, 微短剧, 现代都市(短剧), 古装仙侠(短剧), 总裁, 重生 等
+          const isShortDrama = rawType.includes("短剧") || rawType.includes("爽剧") || rawType.includes("反转") || rawType.includes("总裁") || rawType.includes("重生") || rawType.includes("仙侠") ||
+                               searchText.includes("短剧") || searchText.includes("微短剧") || searchText.includes("爽剧") || searchText.includes("反转爽剧");
+          if (!isShortDrama) return false;
+        } else {
+          if (!searchText.includes(selectedGenre.toLowerCase())) {
+            return false;
+          }
         }
       }
 

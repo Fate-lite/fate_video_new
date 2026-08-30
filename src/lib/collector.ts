@@ -19,6 +19,7 @@ export interface Video {
   id: string; // md5(title + type)
   title: string;
   type: string; // dianying | dianshi | zongyi | dongman
+  typeName?: string; // 原始细分类目名称 (如 AI漫剧, 爽文短剧, 古装仙侠, 国产动漫 等)
   pic: string;
   lang: string;
   area: string;
@@ -36,13 +37,18 @@ export function getMd5(text: string): string {
   return crypto.createHash("md5").update(text).digest("hex");
 }
 
-// 映射分类名称到标准化类型
+// 映射分类名称到标准化类型 (智能高精判定)
 export function normalizeType(typeName: string): string {
   if (!typeName) return "dianying";
-  if (typeName.includes("电影") || typeName.includes("片") || typeName.includes("福利")) return "dianying";
-  if (typeName.includes("剧") || typeName.includes("美剧") || typeName.includes("韩剧")) return "dianshi";
-  if (typeName.includes("综艺") || typeName.includes("晚会")) return "zongyi";
-  if (typeName.includes("动漫") || typeName.includes("动画")) return "dongman";
+  const t = typeName.trim();
+  // 1. 优先判定动漫/AI漫剧/动态漫 (防止被“剧”字误判为电视剧)
+  if (t.includes("AI漫剧") || t.includes("AI动漫") || t.includes("AI动画") || t.includes("漫剧") || t.includes("动态漫") || t.includes("动漫") || t.includes("动画") || t.includes("番剧")) return "dongman";
+  // 2. 判定短剧与电视剧
+  if (t.includes("短剧") || t.includes("爽剧") || t.includes("剧") || t.includes("美剧") || t.includes("韩剧") || t.includes("日剧") || t.includes("泰剧") || t.includes("台剧") || t.includes("港剧")) return "dianshi";
+  // 3. 判定综艺
+  if (t.includes("综艺") || t.includes("晚会") || t.includes("真人秀") || t.includes("脱口秀")) return "zongyi";
+  // 4. 判定电影
+  if (t.includes("电影") || t.includes("片") || t.includes("影") || t.includes("福利")) return "dianying";
   return "dianying";
 }
 
@@ -124,6 +130,7 @@ export function mergeVideos(rawList: any[], source: VideoSource): Video[] {
       id,
       title,
       type,
+      typeName: item.type_name || "",
       pic: item.vod_pic || "",
       lang: item.vod_lang || "国语",
       area: item.vod_area || "大陆",
@@ -192,6 +199,7 @@ export async function fetchAndMergeFromSources(
         // 如果原有海报或简介为空，用新的覆盖
         if (!videoMap[vid.id].pic && vid.pic) videoMap[vid.id].pic = vid.pic;
         if (!videoMap[vid.id].des && vid.des) videoMap[vid.id].des = vid.des;
+        if (!videoMap[vid.id].typeName && vid.typeName) videoMap[vid.id].typeName = vid.typeName;
         if (vid.note && vid.note.length > videoMap[vid.id].note.length) {
           videoMap[vid.id].note = vid.note;
         }
@@ -290,6 +298,7 @@ export async function getCategoryVideos(type: string, limit = 18, forceRefresh =
 
         if (!existing.pic && v.pic) existing.pic = v.pic;
         if (!existing.des && v.des) existing.des = v.des;
+        if (!existing.typeName && v.typeName) existing.typeName = v.typeName;
         if (v.note && v.note.length > existing.note.length) {
           existing.note = v.note;
         }
@@ -391,10 +400,10 @@ export async function warmupAllCategories() {
 const typeIdCache: Record<string, string[]> = {};
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  dianying: ["电影", "动作", "喜剧", "爱情", "科幻", "恐怖", "剧情", "战争", "惊悚", "悬疑", "犯罪", "纪录"],
-  dianshi: ["国产剧", "国产", "国产剧集", "大陆剧", "电视剧", "香港剧", "韩国剧", "欧美剧", "台湾剧", "日本剧", "海外剧", "泰剧", "剧", "短剧", "AI短剧", "爽剧"],
-  zongyi: ["综艺", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺", "综艺节目", "晚会"],
-  dongman: ["动漫", "国产动漫", "日韩动漫", "欧美动漫", "动画", "少儿动漫", "少儿动画", "AI", "AI动漫", "AI动画"],
+  dianying: ["电影", "动作", "喜剧", "爱情", "科幻", "恐怖", "剧情", "战争", "惊悚", "悬疑", "犯罪", "纪录", "灾难", "奇幻", "微电影", "动画电影", "动作片", "爱情片", "科幻片", "喜剧片", "战争片", "恐怖片", "剧情片", "记录片", "悬疑片", "犯罪片"],
+  dianshi: ["国产剧", "大陆剧", "电视剧", "香港剧", "港澳剧", "港剧", "韩国剧", "韩剧", "欧美剧", "美剧", "台湾剧", "台剧", "日本剧", "日剧", "海外剧", "泰剧", "连续剧", "短剧", "爽文短剧", "反转爽剧", "古装仙侠", "现代都市", "穿越年代", "言情总裁", "重生民国", "脑洞悬疑", "擦边短剧", "女频恋爱", "成长逆袭", "爽剧", "短剧专区"],
+  zongyi: ["综艺", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺", "综艺节目", "晚会", "真人秀", "脱口秀", "选秀", "美食", "音乐"],
+  dongman: ["动漫", "国产动漫", "中国动漫", "日韩动漫", "日本动漫", "欧美动漫", "港台动漫", "海外动漫", "动画", "动画片", "少儿动漫", "少儿动画", "AI漫剧", "AI动漫", "AI动画", "动态漫", "漫剧", "动态漫画", "热血", "冒险", "奇幻"],
 };
 
 export async function resolveSourceTypeIds(apiUrl: string, category: string): Promise<string[]> {
@@ -438,17 +447,23 @@ export async function resolveSourceTypeIds(apiUrl: string, category: string): Pr
     const keywords = CATEGORY_KEYWORDS[category] || [];
     const matchedIds: string[] = [];
 
-    // 精细扫描：只要分类名称包含大类匹配的任何一个核心关键字，且排除混淆项，就将其纳入
+    // 精细扫描：精准匹配大类核心关键字并进行高精防混淆隔离
     for (const item of classes) {
       const tid = String(item.type_id);
       const tname = (item.type_name || "").trim();
       if (!tid || !tname) continue;
 
-      // 硬性排除隔离，防止大分类数据越界混淆
-      if (category === "dianying" && (tname.includes("剧") || tname.includes("动漫") || tname.includes("综艺"))) continue;
-      if (category === "dianshi" && (tname.includes("片") || tname.includes("动漫") || tname.includes("综艺"))) continue;
-      if (category === "zongyi" && !tname.includes("综艺") && !tname.includes("晚会")) continue;
-      if (category === "dongman" && !tname.includes("动漫") && !tname.includes("动画")) continue;
+      // 1. 电影隔离：排除剧集、动漫、综艺、体育、短剧
+      if (category === "dianying" && (tname.includes("剧") || tname.includes("动漫") || tname.includes("动画") || tname.includes("漫剧") || tname.includes("综艺") || tname.includes("体育") || tname.includes("赛事") || tname.includes("资讯"))) continue;
+      
+      // 2. 电视剧隔离：排除电影、动漫、动画、漫剧、动态漫、综艺、体育
+      if (category === "dianshi" && (tname.includes("电影") || tname.includes("动漫") || tname.includes("动画") || tname.includes("漫剧") || tname.includes("动态漫") || tname.includes("综艺") || tname.includes("体育") || tname.includes("赛事") || tname.includes("资讯"))) continue;
+      
+      // 3. 综艺隔离：必须包含综艺、晚会、真人秀、脱口秀等
+      if (category === "zongyi" && !tname.includes("综艺") && !tname.includes("晚会") && !tname.includes("真人秀") && !tname.includes("脱口秀")) continue;
+      
+      // 4. 动漫隔离：必须包含动漫、动画、漫剧、动态漫、AI漫剧等，排除纯真人剧集和电影
+      if (category === "dongman" && !tname.includes("动漫") && !tname.includes("动画") && !tname.includes("漫剧") && !tname.includes("动态漫") && !tname.includes("AI漫剧") && !tname.includes("动态漫画")) continue;
 
       // 只要子分类名称中含有该大类任何关键字，就收录
       const match = keywords.some((kw) => tname.includes(kw));
@@ -463,9 +478,9 @@ export async function resolveSourceTypeIds(apiUrl: string, category: string): Pr
         const tid = String(item.type_id);
         const tname = item.type_name || "";
         if (category === "dianying" && tname.includes("电影")) matchedIds.push(tid);
-        if (category === "dianshi" && (tname.includes("电视剧") || tname.includes("剧"))) matchedIds.push(tid);
+        if (category === "dianshi" && (tname.includes("电视剧") || tname.includes("剧") || tname.includes("短剧"))) matchedIds.push(tid);
         if (category === "zongyi" && tname.includes("综艺")) matchedIds.push(tid);
-        if (category === "dongman" && (tname.includes("动漫") || tname.includes("动画"))) matchedIds.push(tid);
+        if (category === "dongman" && (tname.includes("动漫") || tname.includes("动画") || tname.includes("漫剧"))) matchedIds.push(tid);
       }
     }
 
