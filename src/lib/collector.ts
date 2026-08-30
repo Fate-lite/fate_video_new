@@ -278,11 +278,30 @@ export async function getCategoryVideos(type: string, limit = 18, forceRefresh =
     )
   );
 
-  const pagesResults = await Promise.all(pagePromises);
+  // 如果是大厅分类，额外并发注入针对性的特色子类穿透数据
+  const extraPromises: Promise<Video[]>[] = [];
+  if (type === "dongman") {
+    extraPromises.push(
+      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "AI" }, 3000),
+      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "漫剧" }, 3000)
+    );
+  } else if (type === "dianshi") {
+    extraPromises.push(
+      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "短剧" }, 3000),
+      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "爽剧" }, 3000)
+    );
+  }
+
+  const [pagesResults, extraResults] = await Promise.all([
+    Promise.all(pagePromises),
+    Promise.all(extraPromises)
+  ]);
+  
+  const allResults = [...pagesResults, ...extraResults];
   
   // 合并多页数据并在内存中做终极去重融合
   const mergedMap = new Map<string, Video>();
-  for (const pageList of pagesResults) {
+  for (const pageList of allResults) {
     for (const v of pageList) {
       if (mergedMap.has(v.id)) {
         const existing = mergedMap.get(v.id)!;

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { VideoCard } from "@/components/CategorySection";
 import type { Video } from "@/lib/collector";
 
@@ -13,7 +14,7 @@ const YEARS = ["全部", "2026", "2025", "2024", "2023", "2022", "2021", "2020",
 const AREAS = ["全部", "中国大陆", "中国香港", "美国", "日本", "韩国", "欧洲", "其他"];
 const VERSIONS = ["全部", "蓝光/超清", "国语版", "粤语/原声", "连载中", "已完结"];
 
-// 各分类专属的影视类型标签列表
+// 各分类专属的影视类型标签列表 (规范命名，与主流源站精准对齐)
 const GENRES_MAP: Record<string, string[]> = {
   "电影": ["全部", "动作", "喜剧", "爱情", "科幻", "悬疑", "惊悚", "恐怖", "犯罪", "战争", "纪录"],
   "电视剧": ["全部", "短剧", "古装", "都市", "青春", "悬疑", "科幻", "喜剧", "武侠", "战争", "历史"],
@@ -21,23 +22,26 @@ const GENRES_MAP: Record<string, string[]> = {
   "动漫": ["全部", "AI漫剧", "热血", "冒险", "科幻", "奇幻", "青春", "搞笑", "推理", "治愈"],
 };
 
-export default function CategoryFilterList({ initialList, typeName }: CategoryFilterListProps) {
-  // 前端维护当前的影视库状态，允许按需 lazy-collect 追加数据
+function FilterListContent({ initialList, typeName }: CategoryFilterListProps) {
+  const searchParams = useSearchParams();
+
+  // 从 URL 查询参数中读取初始状态，实现 URL 深度定位 (Deep Linking)
+  const initialYear = searchParams.get("year") || "全部";
+  const initialArea = searchParams.get("area") || "全部";
+  const initialGenre = searchParams.get("genre") || "全部";
+  const initialVersion = searchParams.get("version") || "全部";
+  const initialSort = searchParams.get("sort") || "default";
+
+  // 前端维护当前的影视库状态
   const [videoList, setVideoList] = useState<Video[]>(initialList);
-  const [selectedYear, setSelectedYear] = useState("全部");
-  const [selectedArea, setSelectedArea] = useState("全部");
-  const [selectedGenre, setSelectedGenre] = useState("全部");
-  const [selectedVersion, setSelectedVersion] = useState("全部");
-  const [selectedSort, setSelectedSort] = useState("default"); // default | score | hot
+  const [selectedYear, setSelectedYear] = useState(initialYear);
+  const [selectedArea, setSelectedArea] = useState(initialArea);
+  const [selectedGenre, setSelectedGenre] = useState(initialGenre);
+  const [selectedVersion, setSelectedVersion] = useState(initialVersion);
+  const [selectedSort, setSelectedSort] = useState(initialSort); // default | score | hot
   
   const [isLazyLoading, setIsLazyLoading] = useState(false);
-  const [hasLazyFetched, setHasLazyFetched] = useState(false);
-
-  // 路由/传入列表切换时重置状态
-  useEffect(() => {
-    setVideoList(initialList);
-    setHasLazyFetched(false);
-  }, [initialList]);
+  const fetchedGenresRef = useRef<Set<string>>(new Set());
 
   // 根据中文大厅名映射出对应的 API 参数分类名
   const categoryParam = useMemo(() => {
@@ -50,12 +54,72 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
     }
   }, [typeName]);
 
+  // 同步状态到浏览器 URL 查询参数，便于复制分享与刷新还原
+  const updateUrl = useCallback((
+    year: string,
+    genre: string,
+    area: string,
+    version: string,
+    sort: string
+  ) => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams();
+    if (year && year !== "全部") params.set("year", year);
+    if (genre && genre !== "全部") params.set("genre", genre);
+    if (area && area !== "全部") params.set("area", area);
+    if (version && version !== "全部") params.set("version", version);
+    if (sort && sort !== "default") params.set("sort", sort);
+
+    const qs = params.toString();
+    const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState(null, "", newUrl);
+  }, []);
+
+  // 路由/传入列表切换时重置状态
+  useEffect(() => {
+    setVideoList(initialList);
+  }, [initialList]);
+
+  // 深度穿透采集函数
+  const triggerLazyCollect = useCallback(async (targetGenre: string) => {
+    if (fetchedGenresRef.current.has(targetGenre) || isLazyLoading) return;
+    fetchedGenresRef.current.add(targetGenre);
+    setIsLazyLoading(true);
+
+    try {
+      const res = await fetch(
+        `/api/video/lazy-collect?type=${categoryParam}&genre=${encodeURIComponent(targetGenre)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.list) && data.list.length > 0) {
+          setVideoList((prev) => {
+            const map = new Map<string, Video>();
+            prev.forEach((v) => map.set(v.id, v));
+            data.list.forEach((v: Video) => {
+              if (map.has(v.id)) {
+                const exist = map.get(v.id)!;
+                exist.sources.push(...v.sources);
+                if (!exist.typeName && v.typeName) exist.typeName = v.typeName;
+                if (!exist.pic && v.pic) exist.pic = v.pic;
+              } else {
+                map.set(v.id, v);
+              }
+            });
+            return Array.from(map.values());
+          });
+        }
+      }
+    } catch {}
+    setIsLazyLoading(false);
+  }, [categoryParam, isLazyLoading]);
+
   // 获取当前分类所拥有的类型标签
   const genres = useMemo(() => {
     return GENRES_MAP[typeName] || ["全部"];
   }, [typeName]);
 
-  // 前端极速实时去重与多维度交叉过滤
+  // 前端极速实时去重与多维度交叉过滤 (支持原始 typeName 精准匹配与近义词扩展)
   const filteredList = useMemo(() => {
     return videoList.filter((v) => {
       // 1. 年份过滤
@@ -126,11 +190,17 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
     });
   }, [videoList, selectedYear, selectedArea, selectedGenre, selectedVersion]);
 
+  // 当进入页面或切换到某一特定分类时，如果该分类下的视频数量过少，自动触发针对该标签的穿透拉取
+  useEffect(() => {
+    if (selectedGenre !== "全部" && filteredList.length < 18 && !fetchedGenresRef.current.has(selectedGenre)) {
+      triggerLazyCollect(selectedGenre);
+    }
+  }, [selectedGenre, filteredList.length, triggerLazyCollect]);
+
   // 对过滤后的列表执行智能排序打分
   const sortedList = useMemo(() => {
     const listCopy = [...filteredList];
     if (selectedSort === "score") {
-      // 智能提取评分 (如 "8.5分" -> 8.5)
       const getScore = (v: Video) => {
         const match = v.note.match(/(\d+\.\d+|\d+)分/);
         if (match) return parseFloat(match[1]);
@@ -139,49 +209,64 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
       };
       return listCopy.sort((a, b) => getScore(b) - getScore(a));
     } else if (selectedSort === "hot") {
-      // 智能提取热度评分 (被越多资源站收录采集，说明该片越火爆，且包含完结字眼额外加分)
       const getHotScore = (v: Video) => {
-        let score = v.sources.length * 15; // 线路融合越多，热度越高
+        let score = v.sources.length * 15;
         if (v.note.includes("完结") || v.note.includes("全")) score += 20;
         if (v.des && v.des.length > 200) score += 10;
         return score;
       };
       return listCopy.sort((a, b) => getHotScore(b) - getHotScore(a));
     }
-    // 默认按最后更新时间排序 (即原列表的顺序)
     return listCopy;
   }, [filteredList, selectedSort]);
 
-  // 监听过滤结果数量。如果特定筛选条件下的影视资源过少 (少于 12 部)，且我们还没有为该分类触发过深度懒拉取，则自动开启静默后台深度采集
-  useEffect(() => {
-    const triggerLazyCollect = async () => {
-      setIsLazyLoading(true);
-      try {
-        const res = await fetch(
-          `/api/video/lazy-collect?type=${categoryParam}&genre=${encodeURIComponent(selectedGenre)}`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && Array.isArray(data.list)) {
-            // 将深度拉回的数据合并更新到当前的影视卡片池中
-            setVideoList(data.list);
-          }
-        }
-      } catch {}
-      setHasLazyFetched(true);
-      setIsLazyLoading(false);
-    };
-
-    const isFilterActive = selectedYear !== "全部" || selectedArea !== "全部" || selectedGenre !== "全部" || selectedVersion !== "全部";
-    if (isFilterActive && filteredList.length < 12 && !hasLazyFetched && !isLazyLoading) {
-      triggerLazyCollect();
-    }
-  }, [filteredList, selectedYear, selectedArea, selectedGenre, selectedVersion, hasLazyFetched, isLazyLoading, categoryParam]);
-
-  // PC 端限制默认展示 24 个视频，布局更加对称协调（如 6 列 * 4 行）
+  // 默认展示较多视频（如 36 部）
   const displayList = useMemo(() => {
-    return sortedList.slice(0, 24);
+    return sortedList.slice(0, 36);
   }, [sortedList]);
+
+  // 交互处理：切换年份
+  const handleYearChange = (y: string) => {
+    setSelectedYear(y);
+    updateUrl(y, selectedGenre, selectedArea, selectedVersion, selectedSort);
+  };
+
+  // 交互处理：切换类型
+  const handleGenreChange = (g: string) => {
+    setSelectedGenre(g);
+    updateUrl(selectedYear, g, selectedArea, selectedVersion, selectedSort);
+    if (g !== "全部") {
+      triggerLazyCollect(g);
+    }
+  };
+
+  // 交互处理：切换地区
+  const handleAreaChange = (a: string) => {
+    setSelectedArea(a);
+    updateUrl(selectedYear, selectedGenre, a, selectedVersion, selectedSort);
+  };
+
+  // 交互处理：切换版本
+  const handleVersionChange = (v: string) => {
+    setSelectedVersion(v);
+    updateUrl(selectedYear, selectedGenre, selectedArea, v, selectedSort);
+  };
+
+  // 交互处理：切换排序
+  const handleSortChange = (s: string) => {
+    setSelectedSort(s);
+    updateUrl(selectedYear, selectedGenre, selectedArea, selectedVersion, s);
+  };
+
+  // 交互处理：重置所有筛选
+  const handleReset = () => {
+    setSelectedYear("全部");
+    setSelectedArea("全部");
+    setSelectedGenre("全部");
+    setSelectedVersion("全部");
+    setSelectedSort("default");
+    updateUrl("全部", "全部", "全部", "全部", "default");
+  };
 
   return (
     <div className="w-full flex flex-col gap-6">
@@ -204,10 +289,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
             {YEARS.map((y) => (
               <button
                 key={y}
-                onClick={() => {
-                  setSelectedYear(y);
-                  setHasLazyFetched(false);
-                }}
+                onClick={() => handleYearChange(y)}
                 className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
                   selectedYear === y
                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
@@ -227,10 +309,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
             {genres.map((g) => (
               <button
                 key={g}
-                onClick={() => {
-                  setSelectedGenre(g);
-                  setHasLazyFetched(false);
-                }}
+                onClick={() => handleGenreChange(g)}
                 className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
                   selectedGenre === g
                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
@@ -250,10 +329,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
             {AREAS.map((a) => (
               <button
                 key={a}
-                onClick={() => {
-                  setSelectedArea(a);
-                  setHasLazyFetched(false);
-                }}
+                onClick={() => handleAreaChange(a)}
                 className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
                   selectedArea === a
                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
@@ -273,10 +349,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
             {VERSIONS.map((v) => (
               <button
                 key={v}
-                onClick={() => {
-                  setSelectedVersion(v);
-                  setHasLazyFetched(false);
-                }}
+                onClick={() => handleVersionChange(v)}
                 className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
                   selectedVersion === v
                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
@@ -307,8 +380,8 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
             </span>
           )}
           
-          {filteredList.length > 24 && !isLazyLoading && (
-            <span className="text-[10px] text-white/20"> (PC端默认推荐前 24 部)</span>
+          {filteredList.length > 36 && !isLazyLoading && (
+            <span className="text-[10px] text-white/20"> (默认展示前 36 部)</span>
           )}
         </div>
 
@@ -318,7 +391,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
             <span className="text-white/25">排序:</span>
             <div className="flex bg-white/5 border border-white/5 rounded-lg p-0.5">
               <button
-                onClick={() => setSelectedSort("default")}
+                onClick={() => handleSortChange("default")}
                 className={`px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer text-[10px] ${
                   selectedSort === "default" ? "bg-indigo-600 text-white" : "text-white/40 hover:text-white/80"
                 }`}
@@ -326,7 +399,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
                 🕒 最近更新
               </button>
               <button
-                onClick={() => setSelectedSort("hot")}
+                onClick={() => handleSortChange("hot")}
                 className={`px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer text-[10px] ${
                   selectedSort === "hot" ? "bg-indigo-600 text-white" : "text-white/40 hover:text-white/80"
                 }`}
@@ -334,7 +407,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
                 🔥 热门排行
               </button>
               <button
-                onClick={() => setSelectedSort("score")}
+                onClick={() => handleSortChange("score")}
                 className={`px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer text-[10px] ${
                   selectedSort === "score" ? "bg-indigo-600 text-white" : "text-white/40 hover:text-white/80"
                 }`}
@@ -346,14 +419,7 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
           
           {(selectedYear !== "全部" || selectedArea !== "全部" || selectedGenre !== "全部" || selectedVersion !== "全部" || selectedSort !== "default") && (
             <button
-              onClick={() => {
-                setSelectedYear("全部");
-                setSelectedArea("全部");
-                setSelectedGenre("全部");
-                setSelectedVersion("全部");
-                setSelectedSort("default");
-                setHasLazyFetched(false);
-              }}
+              onClick={handleReset}
               className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors cursor-pointer border-l border-white/10 pl-4"
             >
               重置筛选 ✕
@@ -383,5 +449,18 @@ export default function CategoryFilterList({ initialList, typeName }: CategoryFi
       )}
 
     </div>
+  );
+}
+
+export default function CategoryFilterList(props: CategoryFilterListProps) {
+  return (
+    <Suspense fallback={
+      <div className="w-full flex flex-col gap-6">
+        <div className="h-6 bg-white/10 rounded-md w-48 mb-4"></div>
+        <div className="h-40 bg-white/5 rounded-2xl"></div>
+      </div>
+    }>
+      <FilterListContent {...props} />
+    </Suspense>
   );
 }
