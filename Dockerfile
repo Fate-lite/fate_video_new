@@ -37,16 +37,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-ENV USER_DB_URL="file:/app/data/user.db"
-ENV CACHE_DB_URL="file:/app/data/fate.db"
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # 创建 data 目录以便持久化挂载 SQLite
 RUN mkdir -p data
 
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh

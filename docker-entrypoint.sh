@@ -12,5 +12,5 @@ if [ ! -f /app/data/fate.db ]; then
   DATABASE_URL="file:/app/data/fate.db" npx prisma db push --schema=prisma/cache.prisma --skip-generate --accept-data-loss
 fi
 
-echo "Databases ready. Starting Next.js..."
-exec npm run start
+echo "Databases ready. Starting Next.js Standalone server..."
+exec node server.js
