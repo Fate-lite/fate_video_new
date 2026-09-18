@@ -37,18 +37,59 @@ export function getMd5(text: string): string {
   return crypto.createHash("md5").update(text).digest("hex");
 }
 
+// 违规/成人/低俗细分类目黑名单过滤
+export const BLOCKED_KEYWORDS = [
+  "伦理", "福利", "三级", "情色", "写真", "成人", "十八禁", "18禁", "无码", "有码", "偷拍", "自拍"
+];
+
+export function isBlockedContent(typeName?: string, title?: string): boolean {
+  const combined = `${typeName || ""} ${title || ""}`.toLowerCase();
+  return BLOCKED_KEYWORDS.some((kw) => combined.includes(kw));
+}
+
 // 映射分类名称到标准化类型 (智能高精判定)
 export function normalizeType(typeName: string): string {
   if (!typeName) return "dianying";
   const t = typeName.trim();
   // 1. 优先判定动漫/AI漫剧/动态漫 (防止被“剧”字误判为电视剧)
-  if (t.includes("AI漫剧") || t.includes("AI动漫") || t.includes("AI动画") || t.includes("漫剧") || t.includes("动态漫") || t.includes("动漫") || t.includes("动画") || t.includes("番剧")) return "dongman";
+  if (
+    t.includes("AI漫剧") ||
+    t.includes("AI动漫") ||
+    t.includes("AI动画") ||
+    t.includes("动态漫") ||
+    t.includes("动态漫画") ||
+    t.includes("动漫") ||
+    t.includes("动画") ||
+    t.includes("番剧")
+  ) {
+    return "dongman";
+  }
   // 2. 判定短剧与电视剧
-  if (t.includes("短剧") || t.includes("爽剧") || t.includes("剧") || t.includes("美剧") || t.includes("韩剧") || t.includes("日剧") || t.includes("泰剧") || t.includes("台剧") || t.includes("港剧")) return "dianshi";
+  if (
+    t.includes("短剧") ||
+    t.includes("爽剧") ||
+    t.includes("微短剧") ||
+    t.includes("连续剧") ||
+    t.includes("电视剧") ||
+    t.includes("美剧") ||
+    t.includes("韩剧") ||
+    t.includes("日剧") ||
+    t.includes("泰剧") ||
+    t.includes("台剧") ||
+    t.includes("港剧") ||
+    t.includes("国产剧") ||
+    t.includes("海外剧")
+  ) {
+    return "dianshi";
+  }
   // 3. 判定综艺
-  if (t.includes("综艺") || t.includes("晚会") || t.includes("真人秀") || t.includes("脱口秀")) return "zongyi";
+  if (t.includes("综艺") || t.includes("晚会") || t.includes("真人秀") || t.includes("脱口秀")) {
+    return "zongyi";
+  }
   // 4. 判定电影
-  if (t.includes("电影") || t.includes("片") || t.includes("影") || t.includes("福利")) return "dianying";
+  if (t.includes("电影") || t.includes("片") || t.includes("影") || t.includes("解说")) {
+    return "dianying";
+  }
   return "dianying";
 }
 
@@ -115,6 +156,7 @@ export function mergeVideos(rawList: any[], source: VideoSource): Video[] {
 
   for (const item of rawList) {
     if (!item.vod_name) continue;
+    if (isBlockedContent(item.type_name, item.vod_name)) continue;
     const title = item.vod_name.trim();
     const type = normalizeType(item.type_name);
     const id = getMd5(`${title}_${type}`);
@@ -282,12 +324,13 @@ export async function getCategoryVideos(type: string, limit = 18, forceRefresh =
   const extraPromises: Promise<Video[]>[] = [];
   if (type === "dongman") {
     extraPromises.push(
-      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "AI" }, 3000),
-      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "漫剧" }, 3000)
+      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "动态漫" }, 3000),
+      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "动态漫画" }, 3000),
+      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "AI漫剧" }, 3000)
     );
   } else if (type === "dianshi") {
     extraPromises.push(
-      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "短剧" }, 3000),
+      fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "微短剧" }, 3000),
       fetchAndMergeFromSources(activeSources, { ac: "detail", wd: "爽剧" }, 3000)
     );
   }
@@ -303,6 +346,10 @@ export async function getCategoryVideos(type: string, limit = 18, forceRefresh =
   const mergedMap = new Map<string, Video>();
   for (const pageList of allResults) {
     for (const v of pageList) {
+      // 严格分类守卫：防止跨大类串类与违规低俗分类
+      if (v.type !== type) continue;
+      if (isBlockedContent(v.typeName, v.title)) continue;
+
       if (mergedMap.has(v.id)) {
         const existing = mergedMap.get(v.id)!;
         existing.sources.push(...v.sources);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cacheDb } from "@/lib/db";
-import { getActiveSources, fetchAndMergeFromSources, Video } from "@/lib/collector";
+import { getActiveSources, fetchAndMergeFromSources, isBlockedContent, Video } from "@/lib/collector";
 import { addAdminLog } from "@/lib/logger";
 
 export async function GET(req: NextRequest) {
@@ -58,10 +58,12 @@ export async function GET(req: NextRequest) {
         Promise.all(pagePromises),
       ]);
 
-      incomingList = [...searchResults.flat(), ...pageResults.flat()].map((v) => ({ ...v, type: "dianshi" }));
+      incomingList = [...searchResults.flat(), ...pageResults.flat()].filter(
+        (v) => v.type === "dianshi" && !isBlockedContent(v.typeName, v.title)
+      );
     } else if (genre === "AI漫剧" || genre === "AI动漫" || genre === "动态漫") {
       addAdminLog("INFO", `[智能懒加载] 正在为 AI漫剧 类别发起【子分类直采 + 关键词穿透】...`);
-      const kws = ["AI", "AI漫剧", "AI动漫", "动态漫", "漫剧", "修仙", "重生"];
+      const kws = ["动态漫", "动态漫画", "AI漫剧", "AI动漫"];
       
       // 轨道 1: 关键词并发搜索
       const searchPromises = kws.map((kw) =>
@@ -89,7 +91,9 @@ export async function GET(req: NextRequest) {
         Promise.all(pagePromises),
       ]);
 
-      incomingList = [...searchResults.flat(), ...pageResults.flat()].map((v) => ({ ...v, type: "dongman" }));
+      incomingList = [...searchResults.flat(), ...pageResults.flat()].filter(
+        (v) => v.type === "dongman" && !isBlockedContent(v.typeName, v.title)
+      );
     } else {
       // 其他普通标签少于 12 部时，常规并发拉取各大源站第 3, 4 页数据
       addAdminLog("INFO", `[懒加载采集] 分类 [${type}] 标签 [${genre}] 内容较少，正在并发调取各大源站第 3, 4 页数据...`);
@@ -106,20 +110,25 @@ export async function GET(req: NextRequest) {
         )
       );
       const results = await Promise.all(pagePromises);
-      incomingList = results.flat();
+      incomingList = results.flat().filter(
+        (v) => v.type === type && !isBlockedContent(v.typeName, v.title)
+      );
     }
 
     // 3. 将新拉取/搜索的数据与数据库现存的数据进行深度去重合并
     const mergedMap = new Map<string, Video>();
     
-    // 先塞入老数据
+    // 先塞入老数据 (过滤违规内容)
     for (const v of existingList) {
-      mergedMap.set(v.id, v);
+      if (!isBlockedContent(v.typeName, v.title) && v.type === type) {
+        mergedMap.set(v.id, v);
+      }
     }
 
     // 再合并新拉取/搜索到的数据并去重 sources 线路
     let newItemsCount = 0;
     for (const v of incomingList) {
+      if (v.type !== type || isBlockedContent(v.typeName, v.title)) continue;
       if (mergedMap.has(v.id)) {
         const existing = mergedMap.get(v.id)!;
         existing.sources.push(...v.sources);

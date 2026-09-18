@@ -39,9 +39,20 @@ function FilterListContent({ initialList, typeName }: CategoryFilterListProps) {
   const [selectedGenre, setSelectedGenre] = useState(initialGenre);
   const [selectedVersion, setSelectedVersion] = useState(initialVersion);
   const [selectedSort, setSelectedSort] = useState(initialSort); // default | score | hot
+  const [visibleCount, setVisibleCount] = useState(36);
   
   const [isLazyLoading, setIsLazyLoading] = useState(false);
   const fetchedGenresRef = useRef<Set<string>>(new Set());
+
+  // 监听 URL 变化，保证外链跳转与浏览器前进/后退时即时同步筛选 Tab
+  useEffect(() => {
+    setSelectedYear(searchParams.get("year") || "全部");
+    setSelectedArea(searchParams.get("area") || "全部");
+    setSelectedGenre(searchParams.get("genre") || "全部");
+    setSelectedVersion(searchParams.get("version") || "全部");
+    setSelectedSort(searchParams.get("sort") || "default");
+    setVisibleCount(36);
+  }, [searchParams]);
 
   // 根据中文大厅名映射出对应的 API 参数分类名
   const categoryParam = useMemo(() => {
@@ -154,10 +165,22 @@ function FilterListContent({ initialList, typeName }: CategoryFilterListProps) {
         const searchText = `${v.typeName || ""} ${v.des || ""} ${v.note || ""} ${v.actor || ""} ${v.title || ""}`.toLowerCase();
         
         if (selectedGenre === "AI漫剧" || selectedGenre === "AI动漫") {
-          // AI漫剧专项精准匹配：包含 AI漫剧, AI动漫, AI动画, 动态漫, 漫剧, 动态漫画 或 标题/简介明确标识 AI
-          const isAi = rawType.includes("ai漫剧") || rawType.includes("ai动漫") || rawType.includes("漫剧") || rawType.includes("动态漫") || rawType.includes("动态漫画") ||
-                       searchText.includes("ai漫剧") || searchText.includes("ai动漫") || searchText.includes("动态漫") || searchText.includes("动态漫画") || searchText.includes("漫剧") ||
-                       /\bai\b|ai动画|ai短剧|ai生成/i.test(searchText);
+          // AI漫剧精准匹配：排除“动漫剧/动画剧”误判，匹配 AI漫剧、AI动漫、动态漫、动态漫画、AI动画、AI生成
+          const cleanRaw = rawType.replace(/动漫|动画/g, "");
+          const isAi =
+            rawType.includes("ai漫剧") ||
+            rawType.includes("ai动漫") ||
+            rawType.includes("动态漫") ||
+            rawType.includes("动态漫画") ||
+            cleanRaw.includes("漫剧") ||
+            searchText.includes("ai漫剧") ||
+            searchText.includes("ai动漫") ||
+            searchText.includes("动态漫") ||
+            searchText.includes("动态漫画") ||
+            searchText.includes("ai生成") ||
+            searchText.includes("ai动画") ||
+            searchText.includes("ai短剧") ||
+            (v.title && (v.title.includes("动态漫") || v.title.toLowerCase().includes("ai漫")));
           if (!isAi) return false;
         } else if (selectedGenre === "短剧") {
           // 短剧专项增强匹配：包含 短剧, 爽文短剧, 反转爽剧, 爽剧, 微短剧, 现代都市(短剧), 古装仙侠(短剧), 总裁, 重生 等
@@ -221,20 +244,22 @@ function FilterListContent({ initialList, typeName }: CategoryFilterListProps) {
     return listCopy;
   }, [filteredList, selectedSort]);
 
-  // 默认展示较多视频（如 36 部）
+  // 动态展示分页与加载更多
   const displayList = useMemo(() => {
-    return sortedList.slice(0, 36);
-  }, [sortedList]);
+    return sortedList.slice(0, visibleCount);
+  }, [sortedList, visibleCount]);
 
   // 交互处理：切换年份
   const handleYearChange = (y: string) => {
     setSelectedYear(y);
+    setVisibleCount(36);
     updateUrl(y, selectedGenre, selectedArea, selectedVersion, selectedSort);
   };
 
   // 交互处理：切换类型
   const handleGenreChange = (g: string) => {
     setSelectedGenre(g);
+    setVisibleCount(36);
     updateUrl(selectedYear, g, selectedArea, selectedVersion, selectedSort);
     if (g !== "全部") {
       triggerLazyCollect(g);
@@ -244,18 +269,21 @@ function FilterListContent({ initialList, typeName }: CategoryFilterListProps) {
   // 交互处理：切换地区
   const handleAreaChange = (a: string) => {
     setSelectedArea(a);
+    setVisibleCount(36);
     updateUrl(selectedYear, selectedGenre, a, selectedVersion, selectedSort);
   };
 
   // 交互处理：切换版本
   const handleVersionChange = (v: string) => {
     setSelectedVersion(v);
+    setVisibleCount(36);
     updateUrl(selectedYear, selectedGenre, selectedArea, v, selectedSort);
   };
 
   // 交互处理：切换排序
   const handleSortChange = (s: string) => {
     setSelectedSort(s);
+    setVisibleCount(36);
     updateUrl(selectedYear, selectedGenre, selectedArea, selectedVersion, s);
   };
 
@@ -266,6 +294,7 @@ function FilterListContent({ initialList, typeName }: CategoryFilterListProps) {
     setSelectedGenre("全部");
     setSelectedVersion("全部");
     setSelectedSort("default");
+    setVisibleCount(36);
     updateUrl("全部", "全部", "全部", "全部", "default");
   };
 
@@ -381,8 +410,8 @@ function FilterListContent({ initialList, typeName }: CategoryFilterListProps) {
             </span>
           )}
           
-          {filteredList.length > 36 && !isLazyLoading && (
-            <span className="text-[10px] text-white/20"> (默认展示前 36 部)</span>
+          {filteredList.length > visibleCount && !isLazyLoading && (
+            <span className="text-[10px] text-white/20"> (已呈现前 {displayList.length} 部)</span>
           )}
         </div>
 
@@ -442,11 +471,35 @@ function FilterListContent({ initialList, typeName }: CategoryFilterListProps) {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-5 animate-in fade-in duration-300">
-          {displayList.map((v) => (
-            <VideoCard key={v.id} v={v} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-5 animate-in fade-in duration-300">
+            {displayList.map((v) => (
+              <VideoCard key={v.id} v={v} />
+            ))}
+          </div>
+
+          {/* 加载更多控件 */}
+          {sortedList.length > visibleCount && (
+            <div className="flex justify-center mt-6">
+              <button
+                onClick={() => setVisibleCount((prev) => prev + 36)}
+                className="glass-card px-8 py-3 rounded-full text-xs font-bold text-indigo-300 hover:text-white border border-indigo-500/20 hover:border-indigo-500/50 hover:bg-indigo-600/20 transition-all cursor-pointer flex items-center gap-2 shadow-lg hover:scale-102"
+              >
+                <span>加载更多影视</span>
+                <span className="text-white/40 font-normal">
+                  ({displayList.length} / {sortedList.length})
+                </span>
+                <span>↓</span>
+              </button>
+            </div>
+          )}
+
+          {sortedList.length <= visibleCount && sortedList.length > 36 && (
+            <div className="text-center text-xs text-white/20 mt-6 select-none">
+              已为您全部呈现 {sortedList.length} 部影视内容
+            </div>
+          )}
+        </>
       )}
 
     </div>

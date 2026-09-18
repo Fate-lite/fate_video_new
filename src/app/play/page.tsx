@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { PlayDetailSkeleton } from "@/components/Skeletons";
@@ -29,33 +29,39 @@ function PlayContent() {
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [showWarning, setShowWarning] = useState(true);
+  const lastReportedSecRef = useRef<number>(-1);
 
-  // 1. 初始化拉取详情和同类推荐
+  // 1. 初始化拉取详情和同类推荐 (支持 type 可选自适应容错)
   useEffect(() => {
-    if (!title || !type) return;
+    if (!title) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
-    fetch(`/api/video/detail?title=${encodeURIComponent(title)}&type=${type}`)
+    const typeParam = type ? `&type=${encodeURIComponent(type)}` : "";
+    fetch(`/api/video/detail?title=${encodeURIComponent(title)}${typeParam}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.video) {
           setVideo(data.video);
           setIsFavorited(data.isFavorited);
+
+          // 根据影片真实分类拉取同类推荐流
+          const targetType = type || data.video.type || "dianying";
+          fetch(`/api/video/home`)
+            .then((hRes) => hRes.json())
+            .then((hData) => {
+              if (hData.success && hData.data) {
+                const matched = hData.data[targetType] || hData.data.dianying || [];
+                setRelatedVideos(matched.filter((v: Video) => v.title !== title).slice(0, 6));
+              }
+            })
+            .catch(() => {});
         }
         setLoading(false);
       })
       .catch(() => setLoading(false));
-
-    // 同类推荐拉取
-    fetch(`/api/video/home`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.data) {
-          const matched = data.data[type] || data.data.dianying || [];
-          setRelatedVideos(matched.filter((v: Video) => v.title !== title).slice(0, 6));
-        }
-      })
-      .catch(() => {});
 
     // 防骗警告条状态
     const hidden = sessionStorage.getItem("hide_safety_tip");
@@ -195,7 +201,9 @@ function PlayContent() {
               <VideoPlayer
                 url={currentEpisode.url}
                 onTimeUpdate={(time) => {
-                  if (Math.floor(time) % 10 === 0) {
+                  const sec = Math.floor(time);
+                  if (sec > 0 && sec % 10 === 0 && lastReportedSecRef.current !== sec) {
+                    lastReportedSecRef.current = sec;
                     reportHistory(time);
                   }
                 }}

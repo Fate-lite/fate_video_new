@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { Video } from "@/lib/collector";
 
+const FALLBACK_IMG =
+  "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=1200&auto=format&fit=crop";
+
 interface HeroBannerProps {
   bannerList: Video[];
 }
@@ -77,9 +80,12 @@ export default function HeroBanner({ bannerList }: HeroBannerProps) {
             style={{ transitionProperty: "opacity, transform" }}
           >
             <img
-              src={video.pic}
+              src={video.pic || FALLBACK_IMG}
               alt={video.title}
               className="w-full h-full object-cover filter brightness-[0.8] contrast-[1.05]"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = FALLBACK_IMG;
+              }}
             />
           </div>
         ))}
