@@ -8,11 +8,11 @@ export async function GET(req: NextRequest) {
     const title = req.nextUrl.searchParams.get("title") || "";
     const type = req.nextUrl.searchParams.get("type") || "";
 
-    if (!title || !type) {
-      return NextResponse.json({ success: false, msg: "标题或分类参数不能为空" }, { status: 400 });
+    if (!title.trim()) {
+      return NextResponse.json({ success: false, msg: "影片标题参数不能为空" }, { status: 400 });
     }
 
-    const video = await getVideoDetail(title, type);
+    const video = await getVideoDetail(title.trim(), type);
     if (!video) {
       return NextResponse.json({ success: false, msg: "未找到该影片详情" }, { status: 404 });
     }

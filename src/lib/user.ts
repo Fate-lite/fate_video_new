@@ -10,15 +10,45 @@ export function hashPassword(password: string, email: string): string {
 
 // 1. 发送邮箱验证码 (支持 Nodemailer 发送)
 export async function sendVerificationCode(email: string, type = "register"): Promise<{ success: boolean; msg: string }> {
+  const normalizedEmail = email.toLowerCase().trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalizedEmail)) {
+    return { success: false, msg: "请输入有效的邮箱地址" };
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // 1. 业务前提校验：注册时检查是否已被注册；重置时检查是否存在该账号
+  const existingUser = await userDb.users.findUnique({
+    where: { email: normalizedEmail },
+  });
+
+  if (type === "register" && existingUser) {
+    return { success: false, msg: "该邮箱已被注册，请直接登录或找回密码" };
+  }
+  if (type === "reset" && !existingUser) {
+    return { success: false, msg: "未找到该邮箱关联的账号" };
+  }
+
+  // 2. 60秒防刷限流
+  const recentCode = await userDb.email_verifications.findFirst({
+    where: {
+      email: normalizedEmail,
+      created_at: { gt: now - 60 },
+    },
+  });
+  if (recentCode) {
+    return { success: false, msg: "验证码发送过于频繁，请稍候再试" };
+  }
+
   // 生成 6 位随机数字验证码
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const now = Math.floor(Date.now() / 1000);
   const expireAt = now + 10 * 60; // 10分钟过期
 
-  // 1. 写入数据库
+  // 3. 写入数据库
   await userDb.email_verifications.create({
     data: {
-      email,
+      email: normalizedEmail,
       code,
       type,
       created_at: now,
@@ -26,14 +56,14 @@ export async function sendVerificationCode(email: string, type = "register"): Pr
     },
   });
 
-  // 2. 邮件配置发送 (若未配置环境变量，则会在开发环境控制台直接打印，保证流畅体验)
+  // 4. 邮件配置发送 (若未配置环境变量，则会在开发环境控制台直接打印，保证流畅体验)
   const smtpHost = process.env.SMTP_HOST;
   const smtpPort = parseInt(process.env.SMTP_PORT || "465");
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
 
   if (!smtpHost || !smtpUser || !smtpPass) {
-    console.log(`[Email Mock Send] To: ${email}, Code: ${code}, Type: ${type}`);
+    console.log(`[Email Mock Send] To: ${normalizedEmail}, Code: ${code}, Type: ${type}`);
     return { success: true, msg: "验证码已发送（开发模拟打印，请检查后台日志或配置 SMTP 环境变量）" };
   }
 

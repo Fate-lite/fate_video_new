@@ -379,16 +379,32 @@ export async function searchAllSources(keyword: string): Promise<Video[]> {
 }
 
 // 核心业务：单片详情获取 (由于我们要拿完整播放源，我们需要在多源中并发定位该影片)
-export async function getVideoDetail(title: string, type: string): Promise<Video | null> {
+export async function getVideoDetail(title: string, type?: string): Promise<Video | null> {
   const activeSources = await getActiveSources(10);
   const list = await fetchAndMergeFromSources(activeSources, {
     ac: "detail",
     wd: title,
   }, 3500);
 
-  const targetId = getMd5(`${title}_${type}`);
-  const match = list.find((v) => v.id === targetId);
-  return match || null;
+  if (!list || list.length === 0) return null;
+
+  // 1. 若传了 type，优先精确匹配 title + type 生成的 MD5
+  if (type) {
+    const targetId = getMd5(`${title}_${type}`);
+    const match = list.find((v) => v.id === targetId);
+    if (match) return match;
+  }
+
+  // 2. 容错匹配：精确标题一致 (不区分大小写)
+  const exactTitleMatch = list.find((v) => v.title.trim().toLowerCase() === title.trim().toLowerCase());
+  if (exactTitleMatch) return exactTitleMatch;
+
+  // 3. 容错匹配：标题包含
+  const partialMatch = list.find((v) => v.title.includes(title) || title.includes(v.title));
+  if (partialMatch) return partialMatch;
+
+  // 4. 返回第一条搜索结果兜底
+  return list[0] || null;
 }
 
 // 核心业务：自动定时采集大栏目并预热缓存

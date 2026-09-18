@@ -154,9 +154,10 @@ function FilterListContent({ initialList, typeName }: CategoryFilterListProps) {
         const searchText = `${v.typeName || ""} ${v.des || ""} ${v.note || ""} ${v.actor || ""} ${v.title || ""}`.toLowerCase();
         
         if (selectedGenre === "AI漫剧" || selectedGenre === "AI动漫") {
-          // AI漫剧专项增强匹配：包含 AI漫剧, AI动漫, AI动画, 动态漫, 漫剧, 动态漫画 或 标题/简介含 AI
-          const isAi = rawType.includes("ai") || rawType.includes("漫剧") || rawType.includes("动态漫") || rawType.includes("动漫") ||
-                       searchText.includes("ai漫剧") || searchText.includes("ai动漫") || searchText.includes("动态漫") || searchText.includes("漫剧") || searchText.includes("ai");
+          // AI漫剧专项精准匹配：包含 AI漫剧, AI动漫, AI动画, 动态漫, 漫剧, 动态漫画 或 标题/简介明确标识 AI
+          const isAi = rawType.includes("ai漫剧") || rawType.includes("ai动漫") || rawType.includes("漫剧") || rawType.includes("动态漫") || rawType.includes("动态漫画") ||
+                       searchText.includes("ai漫剧") || searchText.includes("ai动漫") || searchText.includes("动态漫") || searchText.includes("动态漫画") || searchText.includes("漫剧") ||
+                       /\bai\b|ai动画|ai短剧|ai生成/i.test(searchText);
           if (!isAi) return false;
         } else if (selectedGenre === "短剧") {
           // 短剧专项增强匹配：包含 短剧, 爽文短剧, 反转爽剧, 爽剧, 微短剧, 现代都市(短剧), 古装仙侠(短剧), 总裁, 重生 等

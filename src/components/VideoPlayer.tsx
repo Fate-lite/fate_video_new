@@ -10,87 +10,123 @@ interface VideoPlayerProps {
 
 export default function VideoPlayer({ url, onTimeUpdate, initialTime = 0 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !url) return;
 
     setLoading(true);
     setError(false);
 
-    // 动态加载 hls.js
-    const scriptId = "hls-js-script";
-    let script = document.getElementById(scriptId) as HTMLScriptElement;
+    // 销毁旧的 Hls 实例
+    if (hlsRef.current) {
+      try {
+        hlsRef.current.destroy();
+      } catch {}
+      hlsRef.current = null;
+    }
 
-    const initHls = () => {
-      // @ts-ignore
-      if (window.Hls) {
-        // @ts-ignore
-        if (window.Hls.isSupported()) {
-          // @ts-ignore
-          const hls = new window.Hls({
-            maxMaxBufferLength: 30,
-            enableWorker: true,
-          });
-          hls.loadSource(url);
-          hls.attachMedia(video);
-          
-          hls.on(
-            // @ts-ignore
-            window.Hls.Events.MANIFEST_PARSED,
-            () => {
-              setLoading(false);
-              if (initialTime > 0) {
-                video.currentTime = initialTime;
-              }
-              video.play().catch(() => {});
-            }
-          );
+    let isCancelled = false;
 
-          hls.on(
-            // @ts-ignore
-            window.Hls.Events.ERROR,
-            (event: any, data: any) => {
-              if (data.fatal) {
+    const setupHls = () => {
+      if (isCancelled || !video) return;
+      const HlsClass = (window as any).Hls;
+
+      if (HlsClass && HlsClass.isSupported()) {
+        const hls = new HlsClass({
+          maxMaxBufferLength: 30,
+          enableWorker: true,
+          lowLatencyMode: true,
+        });
+        hlsRef.current = hls;
+
+        hls.loadSource(url);
+        hls.attachMedia(video);
+
+        hls.on(HlsClass.Events.MANIFEST_PARSED, () => {
+          if (isCancelled) return;
+          setLoading(false);
+          if (initialTime > 0) {
+            video.currentTime = initialTime;
+          }
+          video.play().catch(() => {});
+        });
+
+        hls.on(HlsClass.Events.ERROR, (_event: any, data: any) => {
+          if (isCancelled) return;
+          if (data.fatal) {
+            switch (data.type) {
+              case HlsClass.ErrorTypes.NETWORK_ERROR:
+                // 尝试自动恢复网络加载
+                hls.startLoad();
+                break;
+              case HlsClass.ErrorTypes.MEDIA_ERROR:
+                // 尝试自动恢复媒体缓冲区错误
+                hls.recoverMediaError();
+                break;
+              default:
+                // 无法自动恢复的致命错误
+                try {
+                  hls.destroy();
+                } catch {}
+                hlsRef.current = null;
                 setError(true);
                 setLoading(false);
-              }
+                break;
             }
-          );
-
-          return () => {
-            hls.destroy();
-          };
-        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-          // 原生 Safari 支持
-          video.src = url;
-          video.addEventListener("loadedmetadata", () => {
-            setLoading(false);
-            if (initialTime > 0) {
-              video.currentTime = initialTime;
-            }
-            video.play().catch(() => {});
-          });
-        } else {
+          }
+        });
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        // 原生 Safari / iOS 支持
+        video.src = url;
+        const onLoaded = () => {
+          if (isCancelled) return;
+          setLoading(false);
+          if (initialTime > 0) {
+            video.currentTime = initialTime;
+          }
+          video.play().catch(() => {});
+        };
+        video.addEventListener("loadedmetadata", onLoaded, { once: true });
+        video.addEventListener("error", () => {
+          if (isCancelled) return;
           setError(true);
           setLoading(false);
-        }
+        }, { once: true });
+      } else {
+        setError(true);
+        setLoading(false);
       }
     };
 
-    if (!script) {
-      script = document.createElement("script");
-      script.id = scriptId;
-      script.src = "https://cdn.jsdelivr.net/npm/hls.js@latest";
-      script.onload = initHls;
-      document.head.appendChild(script);
+    // 动态加载 hls.js (解决脚本存在但未加载完成的竞态条件)
+    if ((window as any).Hls) {
+      setupHls();
     } else {
-      initHls();
+      const scriptId = "hls-js-script";
+      let script = document.getElementById(scriptId) as HTMLScriptElement;
+      if (!script) {
+        script = document.createElement("script");
+        script.id = scriptId;
+        script.src = "https://cdn.jsdelivr.net/npm/hls.js@latest";
+        document.head.appendChild(script);
+      }
+      
+      const onScriptLoad = () => setupHls();
+      script.addEventListener("load", onScriptLoad, { once: true });
     }
 
     return () => {
+      isCancelled = true;
+      if (hlsRef.current) {
+        try {
+          hlsRef.current.destroy();
+        } catch {}
+        hlsRef.current = null;
+      }
       video.pause();
       video.src = "";
     };

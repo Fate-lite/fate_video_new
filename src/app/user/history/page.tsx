@@ -190,7 +190,7 @@ export default function HistoryPage() {
                 </div>
 
                 <Link
-                  href={`/play?title=${encodeURIComponent(item.title)}&type=dianying`}
+                  href={`/play?title=${encodeURIComponent(item.title)}`}
                   className="w-full text-center py-2 rounded-xl bg-gradient-to-r from-indigo-500/15 to-pink-500/15 hover:from-indigo-500/30 hover:to-pink-500/30 text-indigo-300 border border-indigo-500/20 text-xs font-black transition-all"
                 >
                   继续续播 →

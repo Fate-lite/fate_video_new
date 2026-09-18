@@ -118,7 +118,7 @@ export default function FavoritesPage() {
 
                 {/* 点击进入播放 */}
                 <Link
-                  href={`/play?title=${encodeURIComponent(item.title)}&type=dianying`}
+                  href={`/play?title=${encodeURIComponent(item.title)}`}
                   className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-3"
                 >
                   <span className="text-[10px] font-bold text-indigo-300 tracking-wider">点击开始播放</span>

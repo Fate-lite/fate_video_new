@@ -36,6 +36,21 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.cachePrisma = cacheDb;
 }
 
+// 启用 SQLite WAL 模式与 5000ms 繁忙等待，杜绝并发写锁
+async function initPragmas() {
+  try {
+    await userDb.$queryRawUnsafe("PRAGMA journal_mode = WAL;");
+    await userDb.$queryRawUnsafe("PRAGMA busy_timeout = 5000;");
+    await userDb.$queryRawUnsafe("PRAGMA synchronous = NORMAL;");
+  } catch {}
+  try {
+    await cacheDb.$queryRawUnsafe("PRAGMA journal_mode = WAL;");
+    await cacheDb.$queryRawUnsafe("PRAGMA busy_timeout = 5000;");
+    await cacheDb.$queryRawUnsafe("PRAGMA synchronous = NORMAL;");
+  } catch {}
+}
+initPragmas().catch(() => {});
+
 // 自动后台每小时采集预热常驻定时器逻辑
 const globalForCron = globalThis as unknown as {
   cronStarted: boolean | undefined;

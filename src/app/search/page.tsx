@@ -14,7 +14,11 @@ function SearchContent() {
   const [list, setList] = useState<Video[]>([]);
 
   useEffect(() => {
-    if (!keyword.trim()) return;
+    if (!keyword.trim()) {
+      setLoading(false);
+      setList([]);
+      return;
+    }
 
     setLoading(true);
     fetch(`/api/video/search?wd=${encodeURIComponent(keyword.trim())}`)
