@@ -7,11 +7,12 @@ chmod -R 755 .
 chmod -R 777 data 2>/dev/null || true
 
 # 检查并拉取最新重构分支代码
+BRANCH=${1:-"feature/v2.1-upgrade"}
 if [ -d ".git" ]; then
-    echo "Fetching latest codes from feature/nextjs-rebuild branch..."
+    echo "Fetching latest codes from ${BRANCH} branch..."
     git remote set-url origin https://github.com/Fate-lite/fate_video_new.git 2>/dev/null || true
-    git fetch origin feature/nextjs-rebuild
-    git checkout feature/nextjs-rebuild
+    git fetch origin ${BRANCH}
+    git checkout ${BRANCH}
     git reset --hard FETCH_HEAD
 else
     echo "Error: .git directory not found. Please run this script in the cloned repository."
